@@ -208,7 +208,7 @@ python3 -m pytest test/ -v
 python3 -m pytest test/test_protocol.py --host touchwasd.local -v
 ```
 
-Tests requiring USB HID state inspection (e.g., verifying a key is pressed) are skipped in live mode. Only protocol-level assertions run against the real device.
+With `python3-evdev` installed and the device's USB HID keyboard visible to the host (e.g. `/dev/input/event5`), the live tests also assert the **actual USB HID keystrokes** the device emits — see `test/test_hid.py`. Without evdev (or no `--host`), those HID-inspection assertions are skipped and only protocol-level checks run.
 
 ### `test/test_core.py` — Unit tests (stdlib only, no dependencies)
 - `charToHID()` lookup table validation against every ASCII character
@@ -224,6 +224,11 @@ Tests requiring USB HID state inspection (e.g., verifying a key is pressed) are 
 - Two-client reference counting over real WS connections
 - Disconnect resets state, new client receives mode sync
 - HTTP root page serving
+
+### `test/test_hid.py` — Live USB HID inspection (requires `--host` + `python3-evdev`)
+- Reads the device's real keystrokes via evdev (`/dev/input/event*`)
+- Press/release round-trip, diagonal two-key, arrow-mode mapping, release-all
+- Verifies the monitor reports HID usage codes (not raw evdev codes)
 
 ## License
 

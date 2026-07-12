@@ -1,2 +1,5 @@
 pytest>=8.0
 websocket-client>=1.0
+# Optional: enables live USB HID inspection (test/test_hid.py).
+# On Debian/Raspberry Pi OS install via apt instead: python3-evdev
+evdev>=1.6; sys_platform != "win32"

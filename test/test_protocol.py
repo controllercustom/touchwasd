@@ -12,6 +12,7 @@ from urllib.error import URLError
 import pytest
 
 from .test_core import KeyState, char_to_hid, ARROW_MAP
+from .evdev_hid import find_keyboard_monitor, _EVDEV_AVAILABLE
 
 WS_MAGIC = b"258EAFA5-E914-47DA-95CA-5AB9B1792851"
 WEBPAGE_RESPONSE = b"MOCK touchWASD Web Page"
@@ -201,7 +202,7 @@ class MockTouchWASDDevice:
         self._ws_running = True
         self._ws_thread = threading.Thread(target=self._ws_accept_loop, daemon=True)
         self._ws_thread.start()
-        time.sleep(0.1)
+        time.sleep(0.3)
 
     def stop(self):
         self._ws_running = False
@@ -371,32 +372,73 @@ class MockTouchWASDDevice:
 
 
 class LiveTouchWASDDevice:
-    """Connects tests to a real AtomS3 device on the network."""
+    """Connects tests to a real AtomS3 device on the network.
+
+    When ``python3-evdev`` is installed and the device's USB HID keyboard
+    is visible to the host (e.g. ``/dev/input/event5``), key state can be
+    inspected for real via :class:`evdev_hid.HidMonitor`, enabling the HID
+    assertions that would otherwise be skipped.
+    """
 
     def __init__(self, host):
         self.host = host
         self.http_port = 80
         self.ws_port = 81
+        self.hid = find_keyboard_monitor() if _EVDEV_AVAILABLE else None
+        self.can_inspect = self.hid is not None
 
     def get_pressed_keys(self):
-        pytest.skip("Cannot inspect key state on a live device (no USB HID access)")
+        if self.hid is None:
+            pytest.skip("Cannot inspect key state on a live device (no evdev HID access)")
+        return self.hid.get_pressed_hid()
 
     def get_mode(self):
         pytest.skip("Cannot read mode from live device without state inspection")
 
     def stop(self):
-        pass
+        if self.hid is not None:
+            self.hid.close()
 
 
 def _is_live(device):
     return isinstance(device, LiveTouchWASDDevice)
 
 
+def _skip_if_no_inspection(device):
+    if _is_live(device) and not device.can_inspect:
+        pytest.skip("Cannot verify key state (live device without evdev HID access)")
+
+
+def _normalize_live_mode(device):
+    """Force the live device to WASD mode before each test.
+
+    The firmware persists its mode in Preferences, so a board left in
+    ARROW mode (or left with keys held) would make WASD-keyed assertions
+    fail. Resetting to WASD mirrors the mock's default starting state.
+    """
+    if not _is_live(device):
+        return
+    ws = _ws_connect(device)
+    ws.recv_text()
+    ws.send_text("#MODE:wasd")
+    try:
+        ws.recv_text(timeout=2)
+    except Exception:
+        pass
+    ws.send_text("~")
+    ws.close()
+    time.sleep(0.15)
+    if device.hid is not None:
+        device.hid.clear()
+
+
 @pytest.fixture
 def device(request):
     host = request.config.getoption("--host")
     if host:
-        yield LiveTouchWASDDevice(host)
+        d = LiveTouchWASDDevice(host)
+        _normalize_live_mode(d)
+        yield d
         return
     d = MockTouchWASDDevice()
     d.start()
@@ -421,7 +463,12 @@ class TestHTTP:
             host = "127.0.0.1"
         try:
             resp = urlopen(f"http://{host}:{device.http_port}/favicon.ico", timeout=5)
-            assert resp.status == 200
+            # The real device intentionally returns 204 for favicon.
+            # The mock does not serve it and raises HTTPError -> 404 below.
+            if _is_live(device):
+                assert resp.status == 204
+            else:
+                assert resp.status == 200
         except HTTPError as e:
             assert e.code == 404
 
@@ -440,46 +487,42 @@ class TestWebSocket:
         ws.close()
 
     def test_press_key_w(self, device):
-        if _is_live(device):
-            pytest.skip("Cannot verify key state on live device (no USB HID access)")
+        _skip_if_no_inspection(device)
         ws = _ws_connect(device)
         ws.recv_text()
         ws.send_text("w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         keys = device.get_pressed_keys()
         assert char_to_hid("w") in keys
 
     def test_release_key(self, device):
-        if _is_live(device):
-            pytest.skip("Cannot verify key state on live device")
+        _skip_if_no_inspection(device)
         ws = _ws_connect(device)
         ws.recv_text()
         ws.send_text("w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         ws.send_text("~w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         assert device.get_pressed_keys() == []
 
     def test_release_all(self, device):
-        if _is_live(device):
-            pytest.skip("Cannot verify key state on live device")
+        _skip_if_no_inspection(device)
         ws = _ws_connect(device)
         ws.recv_text()
         ws.send_text("w")
         ws.send_text("d")
-        time.sleep(0.05)
+        time.sleep(0.5)
         ws.send_text("~")
-        time.sleep(0.05)
+        time.sleep(0.5)
         assert device.get_pressed_keys() == []
 
     def test_diagonal_press(self, device):
-        if _is_live(device):
-            pytest.skip("Cannot verify key state on live device")
+        _skip_if_no_inspection(device)
         ws = _ws_connect(device)
         ws.recv_text()
         ws.send_text("w")
         ws.send_text("d")
-        time.sleep(0.05)
+        time.sleep(0.5)
         keys = device.get_pressed_keys()
         assert char_to_hid("w") in keys
         assert char_to_hid("d") in keys
@@ -505,14 +548,13 @@ class TestWebSocket:
             assert device.get_mode() == "wasd"
 
     def test_arrow_mode_key_mapping(self, device):
-        if _is_live(device):
-            pytest.skip("Cannot verify key state on live device")
+        _skip_if_no_inspection(device)
         ws = _ws_connect(device)
         ws.recv_text()
         ws.send_text("#MODE:arrows")
         ws.recv_text()
         ws.send_text("w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         keys = device.get_pressed_keys()
         assert ARROW_MAP["w"] in keys
         assert char_to_hid("w") not in keys
@@ -526,30 +568,29 @@ class TestWebSocket:
         ws2.recv_text()
 
         ws1.send_text("w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         ws2.send_text("w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         assert device.key_state.refcount[char_to_hid("w")] == 2
 
         ws1.send_text("~w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         keys = device.get_pressed_keys()
         assert char_to_hid("w") in keys
 
         ws2.send_text("~w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         assert device.get_pressed_keys() == []
 
     def test_client_disconnect_resets_state(self, device):
-        if _is_live(device):
-            pytest.skip("Cannot verify key state on live device")
+        _skip_if_no_inspection(device)
         ws = _ws_connect(device)
         ws.recv_text()
         ws.send_text("w")
-        time.sleep(0.05)
+        time.sleep(0.5)
         assert len(device.get_pressed_keys()) == 1
         ws.close()
-        time.sleep(0.1)
+        time.sleep(0.3)
         keys = device.get_pressed_keys()
         assert len(keys) == 0
 

@@ -21,7 +21,7 @@ Web-based WASD/Arrow key USB HID keyboard. ESP32-S3 hosts a WebSocket server tha
 
 ## Modes
 - **WASD mode** (default): `w`, `a`, `s`, `d` keycodes via `charToHID()` lookup table
-- **Arrow mode**: `KEY_UP`, `KEY_DOWN`, `KEY_LEFT`, `KEY_RIGHT` (0x52, 0x51, 0x50, 0x4F)
+- **Arrow mode**: `KEY_UP`, `KEY_DOWN`, `KEY_LEFT`, `KEY_RIGHT` (0x52, 0x51, 0x50, 0x4F). These are the `ESP32USBHID` library's values (the firmware uses `ESP32USBHID::KEY_*` constants directly). Keep `test/test_core.py`'s `ARROW_MAP` in sync with the library.
 - Mode persisted to Preferences (`touchwasd` namespace, `mode` key) and broadcast to all WebSocket clients
 
 ## WebSocket Protocol
@@ -102,7 +102,7 @@ python3 -m pytest test/test_protocol.py --host touchwasd.local -v
 
 The `--host` flag switches `MockTouchWASDDevice` for a `LiveTouchWASDDevice` connection to the real device; without it the full suite runs against the in-process mock.
 
-Tests requiring USB HID state inspection (e.g., verifying a key is pressed) are skipped in live mode. Only protocol-level assertions run against the real device.
+With `python3-evdev` installed and the device's USB HID keyboard visible to the host (e.g. `/dev/input/event5` named `Espressif Systems ESP32S3_DEV Keyboard`), the live tests also assert the **actual USB HID keystrokes** the device emits, read from `EVIOCGKEY` via evdev — see `test/test_hid.py`. Without evdev (or no `--host`), those HID-inspection assertions are skipped and only protocol-level checks run.
 
 ### `test/test_core.py` — Unit tests (stdlib only, no dependencies)
 - `charToHID()` lookup table validation against every ASCII character
@@ -118,6 +118,11 @@ Tests requiring USB HID state inspection (e.g., verifying a key is pressed) are 
 - Two-client reference counting over real WS connections
 - Disconnect resets state, new client receives mode sync
 - HTTP root page serving
+
+### `test/test_hid.py` — Live USB HID inspection (requires `--host` + `python3-evdev`)
+- Reads the device's real keystrokes via evdev (`/dev/input/event*`)
+- Press/release round-trip, diagonal two-key, arrow-mode mapping, release-all
+- Verifies the monitor reports HID usage codes (not raw evdev codes)
 
 ## Calibration Notes
 - The SVG uses a 200x200 viewBox. Outer circle r=96, inner cutout r=28.

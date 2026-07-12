@@ -29,6 +29,7 @@
 #include <ESP32USBHID.h>
 #include <WebSocketsServer.h>
 #include <Preferences.h>
+#include <string.h>
 #ifdef ARDUINO_M5STACK_ATOMS3
 #include <M5GFX.h>
 #endif
@@ -61,39 +62,51 @@ bool resetButtonWasLow = false;
 unsigned long lastWSActivity = 0;
 int wsClientCount = 0;
 
+// Per-HID-usage reference count so multiple clients (or slide-typing that
+// re-sends a key before release) don't prematurely release a key another
+// client is still holding. Mirrors the design in AGENTS.md / test_core.KeyState.
+uint8_t keyRefCount[256] = {0};
+
 void pressKeyOrArrow(char c) {
+  uint8_t kc = 0;
   if (currentMode == MODE_ARROWS) {
-    uint8_t kc = 0;
     switch (c) {
       case 'w': kc = KEY_UP; break;
       case 's': kc = KEY_DOWN; break;
       case 'a': kc = KEY_LEFT; break;
       case 'd': kc = KEY_RIGHT; break;
     }
-    if (kc != 0) HID.pressKey(kc);
   } else {
-    uint8_t kc = ESP32USBHID::charToHID(c);
-    if (kc != 0) HID.pressKey(kc);
+    kc = ESP32USBHID::charToHID(c);
   }
+  if (kc == 0) return;
+  if (keyRefCount[kc] == 0) {
+    HID.pressKey(kc);
+  }
+  if (keyRefCount[kc] < 255) keyRefCount[kc]++;
 }
 
 void releaseKeyOrArrow(char c) {
+  uint8_t kc = 0;
   if (currentMode == MODE_ARROWS) {
-    uint8_t kc = 0;
     switch (c) {
       case 'w': kc = KEY_UP; break;
       case 's': kc = KEY_DOWN; break;
       case 'a': kc = KEY_LEFT; break;
       case 'd': kc = KEY_RIGHT; break;
     }
-    if (kc != 0) HID.releaseKey(kc);
   } else {
-    uint8_t kc = ESP32USBHID::charToHID(c);
-    if (kc != 0) HID.releaseKey(kc);
+    kc = ESP32USBHID::charToHID(c);
+  }
+  if (kc == 0) return;
+  if (keyRefCount[kc] > 0) keyRefCount[kc]--;
+  if (keyRefCount[kc] == 0) {
+    HID.releaseKey(kc);
   }
 }
 
 void resetState() {
+  memset(keyRefCount, 0, sizeof(keyRefCount));
   HID.releaseAllKeys();
 }
 
@@ -299,6 +312,8 @@ void setup() {
       if (!uploadAborted) {
         if (Update.end(true)) {
           Serial.printf("[OTA Web] Success: %u bytes\n", upload.totalSize);
+          // Marked the new partition; reboot so it actually runs.
+          ESP.restart();
         } else {
           Update.printError(Serial);
         }
