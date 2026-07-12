@@ -8,15 +8,16 @@ Web-based WASD/Arrow key USB HID keyboard. ESP32-S3 hosts a WebSocket server tha
 - **Alternative**: Generic ESP32-S3 Dev Module (`esp32:esp32:esp32s3`)
 
 ## Key Technical Details
-- **USB HID**: Keyboard only (single Report ID 1). Uses `TUD_HID_REPORT_DESC_KEYBOARD`. No mouse reports.
+- **USB HID**: Built on the `ESP32USBHID` library. Its descriptor is a composite Keyboard (ID1) + Mouse (ID2) + Consumer (ID3), but touchWASD only sends keyboard reports (single Report ID 1). No mouse/consumer reports are used.
 - **Connectivity**: WiFi via WiFiManager — first boot starts `touchWASD-Config` AP for credential setup.
 - **Communication**:
   - Client -> ESP32: WebSocket on port 81 (key presses, mode changes). HTTP on port 80 serves the HTML page only.
   - ESP32 -> Host PC: USB HID Keyboard via custom class wrapping `USBHID`.
 - **mDNS**: Default `touchwasd.local`; configurable via "Device hostname" field in the WiFiManager captive portal.
-- **OTA**: ArduinoOTA enabled — upload via `espota.py` at `<hostname>.local:3232`. Web OTA at `http://<hostname>.local/update`. Optional password authentication via `#define OTA_PASS` in source (see README).
+- **OTA**: ArduinoOTA enabled — upload via `espota.py` at `<hostname>.local:3232`. Web OTA at `http://<hostname>.local/update`. Optional password authentication via `#define OTA_PASS` (default commented out) in source (see README).
 - **Diagnostics**: Serial monitor at 115200 baud.
 - **Display (AtomS3 only)**: Shows IP, hostname, mode (WASD/Arrows), and client count. Uses M5GFX library.
+- **Physical reset**: Hold the built-in button 5s (AtomS3 GPIO41 / generic BOOT GPIO0) to erase WiFi credentials and reboot into the `touchWASD-Config` captive portal.
 
 ## Modes
 - **WASD mode** (default): `w`, `a`, `s`, `d` keycodes via `charToHID()` lookup table
@@ -52,20 +53,31 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   /home/pi/touchwasd
 
-# OTA upload
+# Native OTA upload (arduino-cli 1.5.1+). Must use `-l network` (protocol),
+# NOT `-P` (that is the programmer flag). Default OTA port is 3232; ArduinoOTA
+# must be enabled in firmware (it is). Use the device IP, not the hostname.
+arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
+  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
+  /home/pi/touchwasd \
+  && arduino-cli upload -p <ip> -l network --fqbn esp32:esp32:m5stack_atoms3 \
+  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
+  --upload-field port=3232 --upload-field password="" \
+  /home/pi/touchwasd
+
+# Fallback OTA upload via espota.py (path version 3.3.8 must match installed esp32 core)
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   /home/pi/touchwasd --output-dir /tmp/touchwasd-build \
   && python3 /home/pi/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
-  -i <hostname>.local -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
-
+  -i <ip> -p 3232 -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
 
 ## Key Design Decisions (from ikeys)
-- **Reference counting**: `keyRefCount[256]` enables mutli-client support. Two clients pressing `w` simultaneously increment the ref count; one releasing does not release the key.
-- **Reset on disconnect**: `resetState()` clears all pressed keys when client count changes or WDT fires (5s inactivity).
-- **USB setup**: Class/SubClass/Protocol set to 0 for composite mode. `USB.begin()` must be called explicitly before `HID.begin()`.
-- **No mouse reports**: Stripped entirely — only keyboard HID used.
+- **Reference counting**: `keyRefCount[256]` enables multi-client support. Two clients pressing `w` simultaneously increment the ref count; one releasing does not release the key.
+- **Reset on disconnect**: `resetState()` clears all pressed keys when client count changes (connect/disconnect).
+- **WDT**: After 5s of WebSocket inactivity, held keys/modifiers are released (only acts when keys are currently pressed).
+- **USB setup**: Handled by the `ESP32USBHID` library — `HID.begin()` sets USB Class/SubClass/Protocol to 0 and calls `USB.begin()` internally before starting HID.
+- **No mouse reports**: Library exposes mouse/consumer APIs, but touchWASD calls only the keyboard methods (`pressKey`/`releaseKey`/`releaseAllKeys`).
 
 ## Web UI
 - Embedded as a C++ raw string literal in `webpage.h` (`R"rawliteral(...)rawliteral"`)
@@ -87,6 +99,8 @@ python3 -m pytest test/ -v
 # Live device tests (requires AtomS3 on the network)
 python3 -m pytest test/test_protocol.py --host touchwasd.local -v
 ```
+
+The `--host` flag switches `MockTouchWASDDevice` for a `LiveTouchWASDDevice` connection to the real device; without it the full suite runs against the in-process mock.
 
 Tests requiring USB HID state inspection (e.g., verifying a key is pressed) are skipped in live mode. Only protocol-level assertions run against the real device.
 

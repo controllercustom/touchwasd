@@ -24,7 +24,7 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 - **Multi-client** — multiple tablets can connect simultaneously; key presses are reference-counted
 - **WiFiManager** — configure WiFi via captive portal on first boot
 - **Customizable mDNS hostname** — default `touchwasd.local`, configurable in the captive portal
-- **OTA updates** — upload firmware wirelessly via `espota.py` or browser (`/update`)
+- **OTA updates** — upload firmware wirelessly via native arduino-cli, `espota.py`, or browser (`/update`)
 - **AtomS3 display** — shows IP, hostname, mode, and client count on the built-in 128×128 screen
 
 ## Hardware Requirements
@@ -56,7 +56,7 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
 #### Arduino IDE
 
 1. Add `https://espressif.github.io/arduino-esp32/package_esp32_index.json` to *Additional Boards Manager URLs*
-2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**
+2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**. Then install **ESP32USBHID** globally from its repo ZIP — see *Installing the ESP32USBHID library* below.
 3. Select **M5AtomS3** (or **ESP32S3 Dev Module** for generic boards)
 4. Set *Tools → USB Mode → **USB-OTG (TinyUSB)***
 5. Set *Tools → USB CDC On Boot → **Disabled***
@@ -64,6 +64,15 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
 7. Open `touchwasd.ino` and upload
 
 > **AtomS3 bootloader mode**: With CDC ACM disabled, press and hold the small Reset button for 2–3 seconds. The LED turns green solid. Upload immediately after.
+
+### Installing the ESP32USBHID library
+
+`ESP32USBHID` is **not** on the Arduino Library Manager — install it globally from its GitHub repo:
+
+1. Download the ZIP: open `https://github.com/controllercustom/ESP32USBHID` and click **Code → Download ZIP** (or grab a release ZIP).
+2. In the Arduino IDE, choose **Sketch → Include Library → Add .ZIP Library…** and select the downloaded `.zip`.
+
+The IDE extracts it into your global sketchbook `libraries/` folder (e.g. `~/Arduino/libraries/ESP32USBHID`), making it available to every sketch — no manual folder copying. arduino-cli also auto-discovers it there.
 
 ### 2. Connect to WiFi
 
@@ -122,7 +131,21 @@ Open `http://touchwasd.local` on multiple phones or tablets. All clients share t
 
 ## OTA Updates
 
-Once the device is online and connected, upload firmware wirelessly:
+Once the device is online and connected, upload firmware wirelessly.
+
+**Native arduino-cli OTA** (arduino-cli 1.5.1+). Use the device **IP** and `-l network` (the network protocol flag — *not* `-P`, which is the programmer flag); default OTA port is 3232:
+
+```bash
+arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
+  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
+  /home/pi/touchwasd \
+  && arduino-cli upload -p <ip> -l network --fqbn esp32:esp32:m5stack_atoms3 \
+  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
+  --upload-field port=3232 --upload-field password="" \
+  /home/pi/touchwasd
+```
+
+**espota.py fallback** (path version `3.3.8` must match the installed esp32 core):
 
 ```bash
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
@@ -130,6 +153,7 @@ arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   /home/pi/touchwasd --output-dir /tmp/touchwasd-build \
   && python3 /home/pi/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
   -i touchwasd.local -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
+# If OTA password is enabled, add: -a "<password>"
 ```
 
 Or use the web interface at `http://touchwasd.local/update`.
@@ -145,7 +169,7 @@ By default, OTA updates require no password — anyone on your network can uploa
 2. Change `"your-password-here"` to your chosen password.
 3. Recompile and upload via serial.
 
-Password applies to both ArduinoOTA (`espota.py -a "<password>"`) and the Web OTA interface (HTTP Basic Auth).
+Password applies to ArduinoOTA — native arduino-cli OTA (`--upload-field password="<password>"`), `espota.py -a "<password>"`, and the Web OTA interface (HTTP Basic Auth).
 
 ## Resetting WiFi
 
@@ -169,6 +193,7 @@ Generic:  esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
 
 - **WiFiManager** by tzapu
 - **WebSockets** by Markus Sattler
+- **ESP32USBHID** by controllercustom (install globally from the repo ZIP — see *Installing the ESP32USBHID library*)
 - **M5GFX** by M5Stack (AtomS3 only)
 
 ## Tests

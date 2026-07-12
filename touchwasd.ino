@@ -26,8 +26,7 @@
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 #include <WebServer.h>
-#include <USB.h>
-#include <USBHID.h>
+#include <ESP32USBHID.h>
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 #ifdef ARDUINO_M5STACK_ATOMS3
@@ -39,55 +38,15 @@
 // Uncomment next line and change the password to enable OTA authentication:
 // #define OTA_PASS "your-password-here"
 
-static const uint8_t hid_report_desc[] = {
-  TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(1))
-};
-
-class TouchWASDHID : public USBHIDDevice {
-private:
-  USBHID hid;
-public:
-  TouchWASDHID() {
-    static bool once = false;
-    if (!once) {
-      once = true;
-      hid.addDevice(this, sizeof(hid_report_desc));
-    }
-  }
-  void begin() { hid.begin(); }
-  bool sendKeyboard(const uint8_t data[8]) {
-    return hid.SendReport(1, data, 8);
-  }
-  uint16_t _onGetDescriptor(uint8_t *dst) override {
-    memcpy(dst, hid_report_desc, sizeof(hid_report_desc));
-    return sizeof(hid_report_desc);
-  }
-};
-
-TouchWASDHID HID;
+ESP32USBHID HID;
 #ifdef ARDUINO_M5STACK_ATOMS3
 M5GFX display;
 #endif
 WebServer server(80);
 WebSocketsServer webSocket(81);
 
-#define MOD_LCTRL  0x01
-#define MOD_LSHIFT 0x02
-#define MOD_LALT   0x04
-#define MOD_LGUI   0x08
-
-#define KEY_UP    0x52
-#define KEY_DOWN  0x51
-#define KEY_LEFT  0x50
-#define KEY_RIGHT 0x4F
-
 enum Mode { MODE_WASD, MODE_ARROWS };
 Mode currentMode = MODE_WASD;
-
-uint8_t modifierState = 0;
-uint8_t pressedKeys[6] = {0};
-int pressedCount = 0;
-uint8_t keyRefCount[256] = {0};
 
 char hostname[33];
 WiFiManagerParameter customHostnameParam("hostname", "Device hostname", "touchwasd", 32);
@@ -102,61 +61,6 @@ bool resetButtonWasLow = false;
 unsigned long lastWSActivity = 0;
 int wsClientCount = 0;
 
-uint8_t charToHID(char c) {
-  if ((uint8_t)c > 127) return 0;
-  static const uint8_t PROGMEM table[128] = {
-    0,0,0,0,0,0,0,0, 0x2A,0x2B,0x28,0,0,0x28,0,0,
-    0,0,0,0,0,0,0,0, 0,0,0,0x29,0,0,0,0,
-    0x2C,0x1E,0x34,0x20, 0x21,0x22,0x24,0x34,
-    0x26,0x27,0x25,0x2E, 0x36,0x2D,0x37,0x38,
-    0x27,0x1E,0x1F,0x20, 0x21,0x22,0x23,0x24,
-    0x25,0x26,0x33,0x33, 0x36,0x2E,0x37,0x38,
-    0x1F,0x04,0x05,0x06, 0x07,0x08,0x09,0x0A,
-    0x0B,0x0C,0x0D,0x0E, 0x0F,0x10,0x11,0x12,
-    0x13,0x14,0x15,0x16, 0x17,0x18,0x19,0x1A,
-    0x1B,0x1C,0x1D,0x2F, 0x31,0x30,0x23,0x2D,
-    0x35,0x04,0x05,0x06, 0x07,0x08,0x09,0x0A,
-    0x0B,0x0C,0x0D,0x0E, 0x0F,0x10,0x11,0x12,
-    0x13,0x14,0x15,0x16, 0x17,0x18,0x19,0x1A,
-    0x1B,0x1C,0x1D,0x2F, 0x31,0x02,0x35,0
-  };
-  return pgm_read_byte(&table[(uint8_t)c]);
-}
-
-void sendKeyboardReport() {
-  uint8_t report[8] = { modifierState, 0 };
-  for (int i = 0; i < pressedCount && i < 6; i++) {
-    report[2 + i] = pressedKeys[i];
-  }
-  HID.sendKeyboard(report);
-}
-
-void pressKeycode(uint8_t kc) {
-  if (keyRefCount[kc] == 0) {
-    for (int i = 0; i < pressedCount; i++) {
-      if (pressedKeys[i] == kc) return;
-    }
-    if (pressedCount < 6) {
-      pressedKeys[pressedCount++] = kc;
-    }
-  }
-  if (keyRefCount[kc] < 255) keyRefCount[kc]++;
-  sendKeyboardReport();
-}
-
-void releaseKeycode(uint8_t kc) {
-  if (keyRefCount[kc] > 0) keyRefCount[kc]--;
-  if (keyRefCount[kc] > 0) return;
-  for (int i = 0; i < pressedCount; i++) {
-    if (pressedKeys[i] == kc) {
-      pressedKeys[i] = pressedKeys[--pressedCount];
-      pressedKeys[pressedCount] = 0;
-      break;
-    }
-  }
-  sendKeyboardReport();
-}
-
 void pressKeyOrArrow(char c) {
   if (currentMode == MODE_ARROWS) {
     uint8_t kc = 0;
@@ -166,10 +70,10 @@ void pressKeyOrArrow(char c) {
       case 'a': kc = KEY_LEFT; break;
       case 'd': kc = KEY_RIGHT; break;
     }
-    if (kc != 0) pressKeycode(kc);
+    if (kc != 0) HID.pressKey(kc);
   } else {
-    uint8_t kc = charToHID(c);
-    if (kc != 0) pressKeycode(kc);
+    uint8_t kc = ESP32USBHID::charToHID(c);
+    if (kc != 0) HID.pressKey(kc);
   }
 }
 
@@ -182,20 +86,15 @@ void releaseKeyOrArrow(char c) {
       case 'a': kc = KEY_LEFT; break;
       case 'd': kc = KEY_RIGHT; break;
     }
-    if (kc != 0) releaseKeycode(kc);
+    if (kc != 0) HID.releaseKey(kc);
   } else {
-    uint8_t kc = charToHID(c);
-    if (kc != 0) releaseKeycode(kc);
+    uint8_t kc = ESP32USBHID::charToHID(c);
+    if (kc != 0) HID.releaseKey(kc);
   }
 }
 
 void resetState() {
-  modifierState = 0;
-  pressedCount = 0;
-  memset(pressedKeys, 0, sizeof(pressedKeys));
-  memset(keyRefCount, 0, sizeof(keyRefCount));
-  uint8_t zero[8] = {0};
-  HID.sendKeyboard(zero);
+  HID.releaseAllKeys();
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
@@ -291,10 +190,6 @@ void setup() {
 #endif
   bootMsg("Starting...", nullptr, nullptr);
 
-  USB.usbClass(0);
-  USB.usbSubClass(0);
-  USB.usbProtocol(0);
-  USB.begin();
   HID.begin();
 
   {
@@ -422,7 +317,7 @@ void setup() {
 
 static void handleWdt(unsigned long now) {
   if (lastWSActivity && now - lastWSActivity > 5000 &&
-      (modifierState || pressedCount)) {
+      (HID.getModifierState() || HID.getPressedCount())) {
     Serial.println("[WDT] No WS activity for 5s — resetting state");
     resetState();
     lastWSActivity = now;
