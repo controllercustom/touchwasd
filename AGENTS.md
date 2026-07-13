@@ -41,34 +41,34 @@ Diagonal presses (NE, SE, SW, NW) send two individual key messages (e.g., `w` th
 # AtomS3
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd
+  .
 
 # Generic ESP32-S3
 arduino-cli compile --fqbn esp32:esp32:esp32s3 \
   --board-options "USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd
+  .
 
 # Serial upload (AtomS3: hold Reset button 2-3s for download mode, LED goes green)
 arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd
+  .
 
 # Native OTA upload (arduino-cli 1.5.1+). Must use `-l network` (protocol),
 # NOT `-P` (that is the programmer flag). Default OTA port is 3232; ArduinoOTA
 # must be enabled in firmware (it is). Use the device IP, not the hostname.
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd \
+  . \
   && arduino-cli upload -p <ip> -l network --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   --upload-field port=3232 --upload-field password="" \
-  /home/pi/touchwasd
+  .
 
 # Fallback OTA upload via espota.py (path version 3.3.8 must match installed esp32 core)
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd --output-dir /tmp/touchwasd-build \
-  && python3 /home/pi/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
+  . --output-dir /tmp/touchwasd-build \
+  && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
   -i <ip> -p 3232 -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
 

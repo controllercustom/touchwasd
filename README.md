@@ -45,12 +45,12 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 # AtomS3
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd
+  .
 
 # Hold Reset button 2-3s on AtomS3 for download mode (LED turns green)
 arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd
+  .
 ```
 
 #### Arduino IDE
@@ -138,11 +138,11 @@ Once the device is online and connected, upload firmware wirelessly.
 ```bash
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd \
+  . \
   && arduino-cli upload -p <ip> -l network --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   --upload-field port=3232 --upload-field password="" \
-  /home/pi/touchwasd
+  .
 ```
 
 **espota.py fallback** (path version `3.3.8` must match the installed esp32 core):
@@ -150,8 +150,8 @@ arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
 ```bash
 arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
   --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  /home/pi/touchwasd --output-dir /tmp/touchwasd-build \
-  && python3 /home/pi/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
+  . --output-dir /tmp/touchwasd-build \
+  && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
   -i touchwasd.local -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
 ```
