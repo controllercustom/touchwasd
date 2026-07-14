@@ -43,14 +43,14 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 
 ```bash
 # AtomS3
-arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  .
+arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
 
 # Hold Reset button 2-3s on AtomS3 for download mode (LED turns green)
-arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  .
+arduino-cli upload -p /dev/ttyACM0 --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
+
+# Generic ESP32-S3 (port is typically /dev/ttyUSB0 or /dev/ttyACMx)
+arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
+arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
 ```
 
 #### Arduino IDE
@@ -133,14 +133,11 @@ Open `http://touchwasd.local` on multiple phones or tablets. All clients share t
 
 Once the device is online and connected, upload firmware wirelessly.
 
-**Native arduino-cli OTA** (arduino-cli 1.5.1+). Use the device **IP** and `-l network` (the network protocol flag — *not* `-P`, which is the programmer flag); default OTA port is 3232:
+**Native arduino-cli OTA** (arduino-cli 1.5.1+). Pass the device **IP** (or hostname) directly to `-p`; arduino-cli treats an IP as a network/OTA port automatically — do **not** add `-l network` (that fails with `port not found: <ip> network`). Default OTA port is 3232:
 
 ```bash
-arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  . \
-  && arduino-cli upload -p <ip> -l network --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
+arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" . \
+  && arduino-cli upload -p <ip> --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   --upload-field port=3232 --upload-field password="" \
   .
 ```
@@ -148,9 +145,7 @@ arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
 **espota.py fallback** (path version `3.3.8` must match the installed esp32 core):
 
 ```bash
-arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  . --output-dir /tmp/touchwasd-build \
+arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" . --output-dir /tmp/touchwasd-build \
   && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
   -i touchwasd.local -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"

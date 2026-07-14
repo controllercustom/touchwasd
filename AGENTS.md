@@ -39,35 +39,29 @@ Diagonal presses (NE, SE, SW, NW) send two individual key messages (e.g., `w` th
 ## Build Commands
 ```bash
 # AtomS3
-arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  .
+arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
 
 # Generic ESP32-S3
-arduino-cli compile --fqbn esp32:esp32:esp32s3 \
-  --board-options "USBMode=default,CDCOnBoot=default" \
-  .
+arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
 
-# Serial upload (AtomS3: hold Reset button 2-3s for download mode, LED goes green)
-arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  .
+# Serial upload — AtomS3: hold Reset button 2-3s for download mode (LED turns green)
+arduino-cli upload -p /dev/ttyACM0 --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
 
-# Native OTA upload (arduino-cli 1.5.1+). Must use `-l network` (protocol),
-# NOT `-P` (that is the programmer flag). Default OTA port is 3232; ArduinoOTA
-# must be enabled in firmware (it is). Use the device IP, not the hostname.
-arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  . \
-  && arduino-cli upload -p <ip> -l network --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
+# Serial upload — Generic ESP32-S3 (port is typically /dev/ttyUSB0 or /dev/ttyACMx)
+arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
+
+# Native OTA upload (arduino-cli 1.5.1+). Pass the device IP (or hostname) directly
+# to `-p`; arduino-cli recognizes an IP as a network/OTA port automatically — do NOT
+# add `-l network` (that fails with "port not found: <ip> network"). Default OTA port
+# is 3232; ArduinoOTA must be enabled in firmware (it is). A disabled OTA password is
+# passed as `--upload-field password=""`. Use the device IP when mDNS is unreliable.
+arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" . \
+  && arduino-cli upload -p <ip> --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   --upload-field port=3232 --upload-field password="" \
   .
 
 # Fallback OTA upload via espota.py (path version 3.3.8 must match installed esp32 core)
-arduino-cli compile --fqbn esp32:esp32:m5stack_atoms3 \
-  --board-options "PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
-  . --output-dir /tmp/touchwasd-build \
+arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" . --output-dir /tmp/touchwasd-build \
   && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
   -i <ip> -p 3232 -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
