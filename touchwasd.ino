@@ -34,7 +34,7 @@
 #include <M5GFX.h>
 #endif
 
-#define VERSION "0.1"
+#define VERSION "1.0.1"
 
 // Uncomment next line and change the password to enable OTA authentication:
 // #define OTA_PASS "your-password-here"
