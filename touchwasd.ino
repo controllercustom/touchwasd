@@ -32,10 +32,12 @@
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 #include <string.h>
+#include <esp_timer.h>
+#include <esp_wifi.h>
 #ifdef ARDUINO_M5STACK_ATOMS3
 #include <M5GFX.h>
 #endif
-#define VERSION "1.0.2"
+#define VERSION "1.0.3"
 
 // Standard USB HID usage IDs for arrow keys (passed directly to pressRaw/releaseRaw)
 #define KEY_UP    0x52
@@ -74,6 +76,10 @@ int wsClientCount = 0;
 // client is still holding. Mirrors the design in AGENTS.md / test_core.KeyState.
 uint8_t keyRefCount[256] = {0};
 
+// Timing instrumentation (microseconds via esp_timer_get_time)
+static uint64_t _t_ws_key = 0;
+static uint64_t _t_hid_send = 0;
+
 static uint8_t charToHid(char c) {
   switch (c) {
     case 'w': return 0x1A;
@@ -103,6 +109,7 @@ void pressKeyOrArrow(char c) {
   }
   if (kc == 0) return;
   if (keyRefCount[kc] == 0) {
+    _t_hid_send = esp_timer_get_time();
     keyboard.pressRaw(kc);
   }
   if (keyRefCount[kc] < 255) keyRefCount[kc]++;
@@ -123,6 +130,7 @@ void releaseKeyOrArrow(char c) {
   if (kc == 0) return;
   if (keyRefCount[kc] > 0) keyRefCount[kc]--;
   if (keyRefCount[kc] == 0) {
+    _t_hid_send = esp_timer_get_time();
     keyboard.releaseRaw(kc);
   }
 }
@@ -152,8 +160,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
     } else if (length == 1 && msg[0] == '~') {
       resetState();
     } else if (length == 1) {
+      _t_ws_key = esp_timer_get_time();
       pressKeyOrArrow(msg[0]);
     } else if (length > 1 && msg[0] == '~') {
+      _t_ws_key = esp_timer_get_time();
       releaseKeyOrArrow(msg[1]);
     }
 
@@ -218,6 +228,7 @@ static void updateDisplay() {}
 void setup() {
   Serial.begin(115200);
   delay(500);
+  setCpuFrequencyMhz(240);
   Serial.println("\n[INIT] Starting touchWASD...");
 
 #ifdef ARDUINO_M5STACK_ATOMS3
@@ -271,6 +282,8 @@ void setup() {
     snprintf(mdnsHostname, sizeof(mdnsHostname), "%s.local", hostname);
     bootMsg(ipStr, mdnsHostname, nullptr);
     Serial.printf("[WiFi] Connected! IP=%s, hostname=%s\n", ipStr, hostname);
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    Serial.println("[WiFi] Modem sleep disabled");
     ArduinoOTA.setHostname(hostname);
 #ifdef OTA_PASS
     ArduinoOTA.setPassword(OTA_PASS);
@@ -393,10 +406,18 @@ static void handleResetButton(unsigned long now) {
 }
 
 void loop() {
-  ArduinoOTA.handle();
-  server.handleClient();
   webSocket.loop();
+  server.handleClient();
+  ArduinoOTA.handle();
   unsigned long now = millis();
+
+  // Print timing data when a key action has been processed
+  if (_t_hid_send > _t_ws_key) {
+    Serial.printf("[TIMING] ws=%llu hid=%llu fw_us=%llu\n",
+      _t_ws_key, _t_hid_send, _t_hid_send - _t_ws_key);
+    _t_ws_key = _t_hid_send = 0;
+  }
+
   handleWdt(now);
   handleResetButton(now);
 }

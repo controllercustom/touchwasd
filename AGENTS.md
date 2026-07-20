@@ -81,6 +81,26 @@ arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8
   -i <ip> -p 3232 -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
 
+## Latency Optimization
+
+Measured end-to-end latency on ESP32-S3 dev module (50-sample median):
+
+| Component | Time |
+|-----------|------|
+| Firmware processing (WS recv → HID send) | **10 µs** (mean) |
+| End-to-end WS send → HID on host (evdev) | **4.5 ms** (median), **3.4 ms** (min) |
+
+### Optimizations applied
+1. **CPU frequency**: `setCpuFrequencyMhz(240)` in `setup()` — ensures max clock rate
+2. **Main loop reorder**: `webSocket.loop()` called first, before `server.handleClient()` and `ArduinoOTA.handle()` — minimizes polling delay for WS messages
+3. **WiFi modem sleep disabled**: `esp_wifi_set_ps(WIFI_PS_NONE)` after WiFi connects — prevents modem sleep from adding 50-200ms of latency. This was the dominant bottleneck (ping dropped from ~130ms to ~5ms).
+
+### Measurement
+The `test/measure_latency.py` script measures both firmware processing time (via Serial `[TIMING]` output) and end-to-end HID arrival (via `evdev.active_keys()`, EVIOCGKEY). Run:
+```bash
+python3 test/measure_latency.py --host <ip> --samples 50
+```
+
 ## Key Design Decisions (from ikeys)
 - **Reference counting**: `keyRefCount[256]` enables multi-client support. Two clients pressing `w` simultaneously increment the ref count; one releasing does not release the key.
 - **Reset on disconnect**: `resetState()` clears all pressed keys when client count changes (connect/disconnect).
