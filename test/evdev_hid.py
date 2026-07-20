@@ -55,14 +55,23 @@ class HidMonitor:
         self.device = device
 
     @classmethod
-    def find(cls, name_substr=DEFAULT_KEYBOARD_NAME):
+    def find(cls, name_substr=None):
         if not _EVDEV_AVAILABLE:
             return None
         try:
             for path in evdev.list_devices():
                 dev = evdev.InputDevice(path)
-                if name_substr in dev.name and ecodes.EV_KEY in dev.capabilities():
-                    return cls(dev)
+                # If a specific substring is given, match it exactly.  Otherwise
+                # fall back to matching any ESP32 keyboard (covers AtomS3,
+                # generic S3 DevKit, T-Dongle-S3, etc.).
+                if ecodes.EV_KEY not in dev.capabilities():
+                    continue
+                if name_substr:
+                    if name_substr in dev.name:
+                        return cls(dev)
+                else:
+                    if "ESP32" in dev.name:
+                        return cls(dev)
         except (OSError, PermissionError):
             return None
         return None
@@ -91,5 +100,20 @@ class HidMonitor:
             pass
 
 
+# Module-level cache so the conftest fixture can set it once.
+_hid_name_override: str | None = None
+
+
+def _set_hid_name_override(value: str | None):
+    global _hid_name_override
+    _hid_name_override = value
+
+
 def find_keyboard_monitor(name_substr=DEFAULT_KEYBOARD_NAME):
-    return HidMonitor.find(name_substr) if _EVDEV_AVAILABLE else None
+    if not _EVDEV_AVAILABLE:
+        return None
+    # If the caller didn't pass an explicit substring and a --hid-name override
+    # was set via conftest, honour that.  Otherwise fall through to auto-detect
+    # (name_substr=None triggers the broad ESP32 keyboard match).
+    effective = _hid_name_override if name_substr == DEFAULT_KEYBOARD_NAME else name_substr
+    return HidMonitor.find(effective)

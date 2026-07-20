@@ -590,7 +590,8 @@ class TestWebSocket:
         time.sleep(0.5)
         assert len(device.get_pressed_keys()) == 1
         ws.close()
-        time.sleep(0.3)
+        disconnect_delay = 2 if _is_live(device) else 0.3
+        time.sleep(disconnect_delay)
         keys = device.get_pressed_keys()
         assert len(keys) == 0
 

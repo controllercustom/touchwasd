@@ -106,3 +106,43 @@ class TestLiveHid:
         ws.send_text("~d")
         time.sleep(0.5)
         ws.close()
+
+
+@pytest.fixture
+def live_host(request):
+    """Minimal fixture that only requires --host (no evdev needed)."""
+    host = request.config.getoption("--host")
+    if not host:
+        pytest.skip("Live test requires --host <device ip>")
+    yield host
+
+
+class TestUsbDescriptor:
+    def test_usb_descriptor_class_is_zero(self, live_host):
+        """bDeviceClass must be 0x00 (Interface Specific), not 0xEF (Composite)."""
+        import glob as _glob
+        for devpath in sorted(_glob.glob("/sys/bus/usb/devices/*/")):
+            try:
+                name_path = f"{devpath}product"
+                with open(name_path) as f:
+                    if "ESP32" not in f.read():
+                        continue
+            except (FileNotFoundError, PermissionError):
+                continue
+
+            for field, expected in [
+                ("bDeviceClass", 0x00),
+                ("bDeviceSubClass", 0x00),
+                ("bDeviceProtocol", 0x00),
+            ]:
+                try:
+                    with open(f"{devpath}{field}") as f:
+                        val = int(f.read().strip(), 16)
+                except (FileNotFoundError, PermissionError):
+                    pytest.skip(f"Cannot read {field} from sysfs")
+                assert val == expected, (
+                    f"{field}=0x{val:02X}, expected 0x00 "
+                    "(device should not enumerate as composite/IAD)"
+                )
+
+            break  # matched the ESP32 device

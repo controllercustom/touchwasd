@@ -22,24 +22,31 @@
  * SOFTWARE.
  */
 
+#include <WiFi.h>
 #include <WiFiManager.h>
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 #include <WebServer.h>
-#include <ESP32USBHID.h>
+#include "USB.h"
+#include <USBHIDKeyboard.h>
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 #include <string.h>
 #ifdef ARDUINO_M5STACK_ATOMS3
 #include <M5GFX.h>
 #endif
+#define VERSION "1.0.2"
 
-#define VERSION "1.0.1"
+// Standard USB HID usage IDs for arrow keys (passed directly to pressRaw/releaseRaw)
+#define KEY_UP    0x52
+#define KEY_DOWN  0x51
+#define KEY_LEFT  0x50
+#define KEY_RIGHT 0x4F
 
 // Uncomment next line and change the password to enable OTA authentication:
 // #define OTA_PASS "your-password-here"
 
-ESP32USBHID HID;
+USBHIDKeyboard keyboard;
 #ifdef ARDUINO_M5STACK_ATOMS3
 M5GFX display;
 #endif
@@ -67,6 +74,21 @@ int wsClientCount = 0;
 // client is still holding. Mirrors the design in AGENTS.md / test_core.KeyState.
 uint8_t keyRefCount[256] = {0};
 
+static uint8_t charToHid(char c) {
+  switch (c) {
+    case 'w': return 0x1A;
+    case 'a': return 0x04;
+    case 's': return 0x16;
+    case 'd': return 0x07;
+    default:  return 0;
+  }
+}
+
+static bool anyKeysPressed() {
+  for (int i = 0; i < 256; i++) if (keyRefCount[i]) return true;
+  return false;
+}
+
 void pressKeyOrArrow(char c) {
   uint8_t kc = 0;
   if (currentMode == MODE_ARROWS) {
@@ -77,11 +99,11 @@ void pressKeyOrArrow(char c) {
       case 'd': kc = KEY_RIGHT; break;
     }
   } else {
-    kc = ESP32USBHID::charToHID(c);
+    kc = charToHid(c);
   }
   if (kc == 0) return;
   if (keyRefCount[kc] == 0) {
-    HID.pressKey(kc);
+    keyboard.pressRaw(kc);
   }
   if (keyRefCount[kc] < 255) keyRefCount[kc]++;
 }
@@ -96,18 +118,18 @@ void releaseKeyOrArrow(char c) {
       case 'd': kc = KEY_RIGHT; break;
     }
   } else {
-    kc = ESP32USBHID::charToHID(c);
+    kc = charToHid(c);
   }
   if (kc == 0) return;
   if (keyRefCount[kc] > 0) keyRefCount[kc]--;
   if (keyRefCount[kc] == 0) {
-    HID.releaseKey(kc);
+    keyboard.releaseRaw(kc);
   }
 }
 
 void resetState() {
   memset(keyRefCount, 0, sizeof(keyRefCount));
-  HID.releaseAllKeys();
+  keyboard.releaseAll();
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
@@ -203,7 +225,16 @@ void setup() {
 #endif
   bootMsg("Starting...", nullptr, nullptr);
 
-  HID.begin();
+  USB.usbClass(0x00);
+  USB.usbSubClass(0x00);
+  USB.usbProtocol(0x00);
+
+  if (!USB.begin()) {
+    Serial.println("[ERR] Failed to initialize USB");
+  } else {
+    Serial.println("[OK] USB initialized");
+  }
+  keyboard.begin();
 
   {
     Preferences p;
@@ -332,7 +363,7 @@ void setup() {
 
 static void handleWdt(unsigned long now) {
   if (lastWSActivity && now - lastWSActivity > 5000 &&
-      (HID.getModifierState() || HID.getPressedCount())) {
+      anyKeysPressed()) {
     Serial.println("[WDT] No WS activity for 5s — resetting state");
     resetState();
     lastWSActivity = now;

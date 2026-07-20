@@ -56,7 +56,7 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,C
 #### Arduino IDE
 
 1. Add `https://espressif.github.io/arduino-esp32/package_esp32_index.json` to *Additional Boards Manager URLs*
-2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**. Then install **ESP32USBHID** globally from its repo ZIP — see *Installing the ESP32USBHID library* below.
+2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**. The USB HID keyboard library is built into the ESP32 core — no additional install needed.
 3. Select **M5AtomS3** (or **ESP32S3 Dev Module** for generic boards)
 4. Set *Tools → USB Mode → **USB-OTG (TinyUSB)***
 5. Set *Tools → USB CDC On Boot → **Disabled***
@@ -64,15 +64,6 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,C
 7. Open `touchwasd.ino` and upload
 
 > **AtomS3 bootloader mode**: With CDC ACM disabled, press and hold the small Reset button for 2–3 seconds. The LED turns green solid. Upload immediately after.
-
-### Installing the ESP32USBHID library
-
-`ESP32USBHID` is **not** on the Arduino Library Manager — install it globally from its GitHub repo:
-
-1. Download the ZIP: open `https://github.com/controllercustom/ESP32USBHID` and click **Code → Download ZIP** (or grab a release ZIP).
-2. In the Arduino IDE, choose **Sketch → Include Library → Add .ZIP Library…** and select the downloaded `.zip`.
-
-The IDE extracts it into your global sketchbook `libraries/` folder (e.g. `~/Arduino/libraries/ESP32USBHID`), making it available to every sketch — no manual folder copying. arduino-cli also auto-discovers it there.
 
 ### 2. Connect to WiFi
 
@@ -188,8 +179,17 @@ Generic:  esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
 
 - **WiFiManager** by tzapu
 - **WebSockets** by Markus Sattler
-- **ESP32USBHID** by controllercustom (install globally from the repo ZIP — see *Installing the ESP32USBHID library*)
-- **M5GFX** by M5Stack (AtomS3 only)
+- **M5GFX** by M5Stack (AtomS3 only — optional for generic boards)
+- USB HID keyboard is built into the ESP32 core (`USB.h`) — no additional library needed
+
+### Versions
+
+| Component | Version | Notes |
+|---|---|---|
+| ESP32 Core | 3.3.x (tested on 3.3.10) | TinyUSB-based USB stack |
+| WiFiManager | 2.0.17 | Captive portal + credential management |
+| WebSockets | 2.7.2 | WebSocket server for touch overlay |
+| M5GFX | 0.2.24 | Display driver (AtomS3 only) |
 
 ## Tests
 
@@ -224,6 +224,23 @@ With `python3-evdev` installed and the device's USB HID keyboard visible to the 
 - Reads the device's real keystrokes via evdev (`/dev/input/event*`)
 - Press/release round-trip, diagonal two-key, arrow-mode mapping, release-all
 - Verifies the monitor reports HID usage codes (not raw evdev codes)
+
+### Live Test Prerequisites
+
+To run live tests with USB HID inspection against a plugged-in device:
+
+1. Install `python3-evdev`: `pip install python3-evdev`
+2. Ensure your user can read `/dev/input/event*`. On Ubuntu 24.04 and similar distros, add yourself to the **input** group:
+   ```bash
+   sudo usermod -aG input $USER
+   # Log out and back in (or run `newgrp input`) for the change to take effect
+   ```
+3. Run with both flags so tests connect over WiFi *and* inspect USB HID locally:
+   ```bash
+   python3 -m pytest test/ --host 192.168.1.xxx -v
+   ```
+
+The `--hid-name` flag can override the auto-detected keyboard name substring if needed (e.g., `--hid-name "ESP32S3_DEV"`).
 
 ## License
 
