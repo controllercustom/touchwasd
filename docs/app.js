@@ -113,10 +113,6 @@ async function flash() {
     }
 
     transport = new Transport(port);
-    await transport.connect(BAUD);
-    transport.readLoop();
-    log('Connected', 'success');
-    setStatus('Connected', 'connected');
 
     loader = new ESPLoader({
       transport,
