@@ -151,8 +151,8 @@ async function flash() {
 
     for (let seq = 0; seq < numBlocks; seq++) {
       const offset = seq * writeSize;
-      const end = Math.min(offset + writeSize, fileSize);
-      const chunk = firmwareData.slice(offset, end);
+      const size = Math.min(writeSize, fileSize - offset);
+      const chunk = new Uint8Array(firmwareData, offset, size);
       await loader.flashBlock(chunk, seq);
 
       const pct = ((seq + 1) / numBlocks) * 100;
