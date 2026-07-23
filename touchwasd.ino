@@ -37,7 +37,7 @@
 #ifdef ARDUINO_M5STACK_ATOMS3
 #include <M5GFX.h>
 #endif
-#define VERSION "1.0.3"
+#define VERSION "1.0.4"
 
 // Standard USB HID usage IDs for arrow keys (passed directly to pressRaw/releaseRaw)
 #define KEY_UP    0x52

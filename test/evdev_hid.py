@@ -63,7 +63,7 @@ class HidMonitor:
                 dev = evdev.InputDevice(path)
                 # If a specific substring is given, match it exactly.  Otherwise
                 # fall back to matching any ESP32 keyboard (covers AtomS3,
-                # generic S3 DevKit, T-Dongle-S3, etc.).
+                # generic S3 DevKit, etc.).
                 if ecodes.EV_KEY not in dev.capabilities():
                     continue
                 if name_substr:

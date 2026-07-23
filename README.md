@@ -41,15 +41,17 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 
 #### Arduino CLI
 
-```bash
-# AtomS3
-arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
+Pinned builds (use `--profile` instead of `--fqbn` for exact versions from `sketch.yaml`):
 
+```bash
+# AtomS3 (pinned via sketch.yaml)
+arduino-cli compile --profile atoms3 .
 # Hold Reset button 2-3s on AtomS3 for download mode (LED turns green)
 arduino-cli upload -p /dev/ttyACM0 --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
 
-# Generic ESP32-S3 (port is typically /dev/ttyUSB0 or /dev/ttyACMx)
-arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
+# Generic ESP32-S3 (pinned via sketch.yaml)
+arduino-cli compile --profile esp32s3 .
+# Serial upload (port is typically /dev/ttyUSB0 or /dev/ttyACMx)
 arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
 ```
 
@@ -124,20 +126,21 @@ Open `http://touchwasd.local` on multiple phones or tablets. All clients share t
 
 Once the device is online and connected, upload firmware wirelessly.
 
-**Native arduino-cli OTA** (arduino-cli 1.5.1+). Pass the device **IP** (or hostname) directly to `-p`; arduino-cli treats an IP as a network/OTA port automatically — do **not** add `-l network` (that fails with `port not found: <ip> network`). Default OTA port is 3232:
+**Native arduino-cli OTA** (arduino-cli 1.5.1+). Pass the device **IP** (or hostname) directly to `-p` with `--protocol network` (without it arduino-cli tries to open the address as a serial port). Default OTA port is 3232; ArduinoOTA must be enabled in firmware (it is). A disabled OTA password is passed as `--upload-field password=""`:
 
 ```bash
-arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" . \
+arduino-cli compile --profile atoms3 . \
   && arduino-cli upload -p <ip> --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" \
   --upload-field port=3232 --upload-field password="" \
+  --protocol network \
   .
 ```
 
-**espota.py fallback** (path version `3.3.8` must match the installed esp32 core):
+**espota.py fallback** (path must match installed esp32 core):
 
 ```bash
-arduino-cli compile --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" . --output-dir /tmp/touchwasd-build \
-  && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.8/tools/espota.py \
+arduino-cli compile --profile atoms3 . --output-dir /tmp/touchwasd-build \
+  && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.10/tools/espota.py \
   -i touchwasd.local -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
 ```
@@ -184,12 +187,15 @@ Generic:  esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
 
 ### Versions
 
+Pinned in `sketch.yaml` for reproducible builds:
+
 | Component | Version | Notes |
 |---|---|---|
-| ESP32 Core | 3.3.x (tested on 3.3.10) | TinyUSB-based USB stack |
-| WiFiManager | 2.0.17 | Captive portal + credential management |
-| WebSockets | 2.7.2 | WebSocket server for touch overlay |
-| M5GFX | 0.2.24 | Display driver (AtomS3 only) |
+| ESP32 Core | 3.3.10 | Pinned in `sketch.yaml` |
+| WiFiManager | 2.0.17 | Pinned in `sketch.yaml` |
+| WebSockets | 2.7.2 | Pinned in `sketch.yaml` |
+| M5GFX | 0.2.26 | Pinned in `sketch.yaml` (AtomS3 only) |
+
 
 ## Tests
 
@@ -224,6 +230,13 @@ With `python3-evdev` installed and the device's USB HID keyboard visible to the 
 - Reads the device's real keystrokes via evdev (`/dev/input/event*`)
 - Press/release round-trip, diagonal two-key, arrow-mode mapping, release-all
 - Verifies the monitor reports HID usage codes (not raw evdev codes)
+
+### `test/test_e2e.py` — Latency measurement (standalone, no pytest)
+- Sends key presses over WebSocket, observes HID arrival via evdev `select.select()`
+- Measures end-to-end latency (WS send → USB HID on host) with statistical report
+- Optional `--serial` flag reads `[TIMING]` markers for firmware processing time split
+- Configurable pass/fail threshold (default 20ms p99)
+- Usage: `python3 test/test_e2e.py --host <ip> [--serial /dev/ttyUSB0] [--samples 50]`
 
 ### Live Test Prerequisites
 

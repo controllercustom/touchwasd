@@ -36,7 +36,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>touchWASD v1.0.3</title>
+    <title>touchWASD 1.0.4</title>
     <style>
         :root {
             --bg: #1a1a2e;
@@ -69,6 +69,9 @@ const char index_html[] PROGMEM = R"rawliteral(
         #circle-container {
             position: relative;
             flex-shrink: 0;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         #circle-container.sz-sm { width: min(40vw, 50svh, 240px); height: min(40vw, 50svh, 240px); }
         #circle-container.sz-md { width: min(60vw, 60svh, 360px); height: min(60vw, 60svh, 360px); }
@@ -79,11 +82,23 @@ const char index_html[] PROGMEM = R"rawliteral(
             width: 100%;
             height: 100%;
             display: block;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        #circle-container svg text {
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            user-select: none;
         }
 
         .slice {
             cursor: pointer;
             transition: opacity 0.05s ease;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
         .slice:active {
             opacity: 0.6;
@@ -107,8 +122,6 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         #settings-btn {
             position: fixed;
-            top: 12px;
-            right: 16px;
             width: 48px;
             height: 48px;
             border-radius: 24px;
@@ -122,6 +135,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             justify-content: center;
             z-index: 200;
             touch-action: none;
+            will-change: transform;
         }
         #settings-btn:active {
             background: rgba(255,255,255,0.2);
@@ -405,12 +419,21 @@ function updateCenterLabel() {
     document.getElementById('center-label').textContent = currentMode === 'wasd' ? 'WASD' : 'Arrows';
 }
 
+function applySVGStyles() {
+    const texts = document.querySelectorAll('#circle-container svg text');
+    for (let i = 0; i < texts.length; i++) {
+        texts[i].style.webkitUserSelect = 'none';
+        texts[i].style.webkitTouchCallout = 'none';
+    }
+}
+
 function draw() {
     const g = document.getElementById('slices');
     g.innerHTML = '';
     renderSlices();
     renderLabels();
     updateCenterLabel();
+    applySVGStyles();
 }
 
 function applySettings() {
@@ -424,15 +447,36 @@ function applySettings() {
 
 function updateGearPosition() {
     const btn = document.getElementById('settings-btn');
-    if (currentPs === 'topright') {
+    const pos = currentPs;
+    if (pos === 'bottom' || pos === 'bottomleft') {
+        btn.style.top = '12px';
+        btn.style.right = '16px';
+        btn.style.bottom = 'auto';
+        btn.style.left = 'auto';
+    } else if (pos === 'bottomright') {
+        btn.style.top = '12px';
+        btn.style.left = '16px';
+        btn.style.bottom = 'auto';
+        btn.style.right = 'auto';
+    } else if (pos === 'top') {
+        btn.style.bottom = '12px';
+        btn.style.left = '16px';
+        btn.style.top = 'auto';
+        btn.style.right = 'auto';
+    } else if (pos === 'topleft') {
+        btn.style.bottom = '12px';
+        btn.style.right = '16px';
+        btn.style.top = 'auto';
+        btn.style.left = 'auto';
+    } else if (pos === 'topright') {
         btn.style.bottom = '12px';
         btn.style.left = '16px';
         btn.style.top = 'auto';
         btn.style.right = 'auto';
     } else {
-        btn.style.top = '12px';
+        btn.style.bottom = '12px';
         btn.style.right = '16px';
-        btn.style.bottom = 'auto';
+        btn.style.top = 'auto';
         btn.style.left = 'auto';
     }
 }
@@ -494,12 +538,15 @@ function getSliceFromPoint(el) {
 }
 
 document.addEventListener('pointerdown', function(e) {
+    const container = document.getElementById('circle-container');
+    if (container.contains(e.target)) {
+        e.preventDefault();
+    }
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const sliceEl = el && el.closest('.slice');
     if (!sliceEl) return;
     const slice = slices[parseInt(sliceEl.dataset.index)];
     if (!slice) return;
-    e.preventDefault();
     sliceEl.classList.add('active');
     pressedPointers.set(e.pointerId, { slice: slice, el: sliceEl });
     sendKeysDown(slice.keys);
@@ -567,6 +614,11 @@ function updateModeButtons() {
 }
 
 document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+document.addEventListener('dblclick', function(e) { e.preventDefault(); });
+
+document.getElementById('circle-container').addEventListener('touchstart', function(e) {
+    e.preventDefault();
+}, { passive: false });
 
 applySettings();
 draw();

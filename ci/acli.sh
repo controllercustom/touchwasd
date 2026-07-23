@@ -19,11 +19,11 @@ then
     arduino-cli core --no-color update-index
     arduino-cli core --no-color install ${PLATFORM}${COREVER}
     arduino-cli core --no-color list
-    # Install libraries
+    # Install libraries (pinned versions matching sketch.yaml)
     arduino-cli lib --no-color update-index
-    arduino-cli lib --no-color install "WiFiManager"
-    arduino-cli lib --no-color install "M5GFX"
-    arduino-cli lib --no-color install "WebSockets"
+    arduino-cli lib --no-color install "WiFiManager@2.0.17"
+    arduino-cli lib --no-color install "WebSockets@2.7.2"
+    arduino-cli lib --no-color install "M5GFX@0.2.26"
     arduino-cli lib --no-color list
     # convenience commands
     alias cc="arduino-cli compile -u --port ${UPLOADPORT} ${BOARD_OPTIONS} --fqbn ${BOARD} --output-dir \"./build\" ."

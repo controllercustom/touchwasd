@@ -1,5 +1,8 @@
 pytest>=8.0
 websocket-client>=1.0
-# Optional: enables live USB HID inspection (test/test_hid.py).
+# Optional: enables live USB HID inspection (test/test_hid.py, test/test_e2e.py).
 # On Debian/Raspberry Pi OS install via apt instead: python3-evdev
 evdev>=1.6; sys_platform != "win32"
+# Optional: enables firmware timing split via [TIMING] serial markers (test/test_e2e.py --serial).
+# On Debian/Raspberry Pi OS install via apt instead: python3-serial
+pyserial>=3.5; sys_platform != "win32"
