@@ -3,6 +3,7 @@ import { ESPLoader, Transport } from 'https://cdn.jsdelivr.net/npm/esptool-js/bu
 let loader = null;
 let port = null;
 let transport = null;
+let manifest = null;
 
 const els = {
   board: document.getElementById('board'),
@@ -58,21 +59,21 @@ async function loadFirmwareManifest() {
   }
 }
 
-function populateVersions(manifest) {
+function populateVersions(m) {
   const sel = els.version;
   sel.innerHTML = '';
-  if (!manifest || !manifest.versions || manifest.versions.length === 0) {
+  if (!m || !m.versions || m.versions.length === 0) {
     sel.innerHTML = '<option value="">No versions available</option>';
     return;
   }
-  for (const v of manifest.versions) {
+  for (const v of m.versions) {
     const opt = document.createElement('option');
     opt.value = v;
     opt.textContent = v;
     sel.appendChild(opt);
   }
-  if (manifest.latest) {
-    sel.value = manifest.latest;
+  if (m.latest) {
+    sel.value = m.latest;
   }
 }
 
@@ -82,11 +83,31 @@ function updateInstructions() {
   els.esp32s3Info.classList.toggle('hidden', board !== 'esp32s3');
 }
 
-function firmwareUrl() {
-  const board = els.board.value;
-  const version = els.version.value;
-  if (!version) return null;
-  return 'firmware/' + version + '/' + board + '/touchwasd.ino.merged.bin';
+function flashLayout() {
+  return manifest && manifest.flashLayout ? manifest.flashLayout : [
+    { file: 'firmware.bin', address: 0x10000 },
+  ];
+}
+
+async function flashRegion(url, address, isLast) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Download failed: ' + url + ' HTTP ' + resp.status);
+  const data = await resp.arrayBuffer();
+  log(url.split('/').pop() + ' at 0x' + address.toString(16) + ' (' + (data.byteLength / 1024).toFixed(1) + ' KB)', 'info');
+
+  const numBlocks = await loader.flashBegin(data.byteLength, address);
+
+  for (let seq = 0; seq < numBlocks; seq++) {
+    const offset = seq * loader.FLASH_WRITE_SIZE;
+    const size = Math.min(loader.FLASH_WRITE_SIZE, data.byteLength - offset);
+    const chunk = new Uint8Array(data, offset, size);
+    await loader.flashBlock(chunk, seq);
+  }
+
+  await loader.flashFinish(isLast);
+  if (isLast) {
+    log('Rebooting...', 'info');
+  }
 }
 
 async function flash() {
@@ -95,11 +116,15 @@ async function flash() {
     return;
   }
 
-  const url = firmwareUrl();
-  if (!url) {
+  const board = els.board.value;
+  const version = els.version.value;
+  if (!version) {
     log('No firmware version selected', 'error');
     return;
   }
+
+  const layout = flashLayout();
+  const baseUrl = 'firmware/' + version + '/' + board + '/';
 
   els.flashBtn.disabled = true;
   setStatus('Connecting...', 'flashing');
@@ -119,14 +144,6 @@ async function flash() {
       baudrate: BAUD,
     });
 
-    log('Downloading firmware...', 'info');
-    const firmwareResp = await fetch(url);
-    if (!firmwareResp.ok) {
-      throw new Error('Firmware download failed: HTTP ' + firmwareResp.status);
-    }
-    const firmwareData = await firmwareResp.arrayBuffer();
-    log('Firmware loaded (' + (firmwareData.byteLength / 1024).toFixed(1) + ' KB)', 'info');
-
     log('Synchronizing with chip...', 'info');
     const chipDesc = await loader.main();
     log('Chip: ' + chipDesc, 'info');
@@ -141,29 +158,17 @@ async function flash() {
       log('Full flash erase complete', 'info');
     }
 
-    const fileSize = firmwareData.byteLength;
-    const writeSize = loader.FLASH_WRITE_SIZE || 0x400;
-
     log('Flashing firmware...', 'info');
     setStatus('Flashing...', 'flashing');
 
-    const numBlocks = await loader.flashBegin(fileSize, 0x0);
-
-    for (let seq = 0; seq < numBlocks; seq++) {
-      const offset = seq * writeSize;
-      const size = Math.min(writeSize, fileSize - offset);
-      const chunk = new Uint8Array(firmwareData, offset, size);
-      await loader.flashBlock(chunk, seq);
-
-      const pct = ((seq + 1) / numBlocks) * 100;
-      setProgress(pct, 'Block ' + (seq + 1) + '/' + numBlocks);
+    for (let i = 0; i < layout.length; i++) {
+      const entry = layout[i];
+      const isLast = i === layout.length - 1;
+      await flashRegion(baseUrl + entry.file, entry.address, isLast);
     }
 
     log('Flashing complete!', 'success');
     setStatus('Done', 'done');
-
-    log('Rebooting...', 'info');
-    await loader.flashFinish(true);
 
   } catch (e) {
     log('Error: ' + e.message, 'error');
@@ -185,7 +190,7 @@ els.flashBtn.addEventListener('click', flash);
   log('touchWASD Firmware Flasher ready', 'info');
   log('Select a board and version, then click Flash Firmware', 'info');
 
-  const manifest = await loadFirmwareManifest();
+  manifest = await loadFirmwareManifest();
   if (manifest) {
     populateVersions(manifest);
     log('Found ' + manifest.versions.length + ' firmware version(s)', 'info');

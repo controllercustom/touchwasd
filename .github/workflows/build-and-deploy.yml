@@ -88,10 +88,15 @@ jobs:
             cp gh-pages/firmware.json deploy/firmware.json
           fi
 
-          mkdir -p deploy/firmware/${VERSION}/atoms3
-          mkdir -p deploy/firmware/${VERSION}/esp32s3
-          cp build/atoms3/touchwasd.ino.merged.bin deploy/firmware/${VERSION}/atoms3/
-          cp build/esp32s3/touchwasd.ino.merged.bin deploy/firmware/${VERSION}/esp32s3/
+          for board in atoms3 esp32s3; do
+            bdir="build/esp32.esp32.${board}"
+            fdir="deploy/firmware/${VERSION}/${board}"
+            mkdir -p "$fdir"
+            cp "$bdir/touchwasd.ino.bootloader.bin" "$fdir/bootloader.bin"
+            cp "$bdir/touchwasd.ino.partitions.bin" "$fdir/partitions.bin"
+            cp "$bdir/boot_app0.bin"                 "$fdir/boot_app0.bin"
+            cp "$bdir/touchwasd.ino.bin"             "$fdir/firmware.bin"
+          done
 
       - name: Generate firmware manifest
         run: |
@@ -103,9 +108,16 @@ jobs:
                if os.path.isdir(os.path.join(firmware_dir, d)) and not d.startswith('.')],
               reverse=True
           )
+          FLASH_LAYOUT = [
+              {'file': 'bootloader.bin', 'address': 0x0},
+              {'file': 'partitions.bin', 'address': 0x8000},
+              {'file': 'boot_app0.bin',  'address': 0xe000},
+              {'file': 'firmware.bin',   'address': 0x10000},
+          ]
           manifest = {
               'versions': versions,
               'latest': versions[0] if versions else None,
+              'flashLayout': FLASH_LAYOUT,
               'boards': {
                   'esp32s3': {'name': 'Generic ESP32-S3 Dev Module'},
                   'atoms3':   {'name': 'M5Stack AtomS3'}
