@@ -94,8 +94,15 @@ jobs:
             mkdir -p "$fdir"
             cp "$bdir/touchwasd.ino.bootloader.bin" "$fdir/bootloader.bin"
             cp "$bdir/touchwasd.ino.partitions.bin" "$fdir/partitions.bin"
-            cp "$bdir/boot_app0.bin"                 "$fdir/boot_app0.bin"
-            cp "$bdir/touchwasd.ino.bin"             "$fdir/firmware.bin"
+            if [ -f "$bdir/boot_app0.bin" ]; then
+              cp "$bdir/boot_app0.bin" "$fdir/boot_app0.bin"
+            else
+              BAPP0=$(find ~/.arduino15 -path '*/esp32/*/tools/partitions/boot_app0.bin' 2>/dev/null | head -1)
+              if [ -n "$BAPP0" ]; then
+                cp "$BAPP0" "$fdir/boot_app0.bin"
+              fi
+            fi
+            cp "$bdir/touchwasd.ino.bin" "$fdir/firmware.bin"
           done
 
       - name: Generate firmware manifest
