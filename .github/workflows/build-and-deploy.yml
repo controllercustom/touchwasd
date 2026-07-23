@@ -138,12 +138,12 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
           mkdir -p /tmp/gh-pages
           cp -r deploy/firmware deploy/firmware.json /tmp/gh-pages/
           cd /tmp/gh-pages
           git init
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add -A
           git commit -m "Firmware $VERSION" --allow-empty
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/gh-pages --force
