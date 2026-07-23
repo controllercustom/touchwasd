@@ -1,4 +1,4 @@
-import { ESPLoader, Transport } from 'https://cdn.jsdelivr.net/npm/esptool-js/lib/index.js';
+import { ESPLoader, Transport } from 'https://cdn.jsdelivr.net/npm/esptool-js/bundle.js';
 
 let loader = null;
 let port = null;
