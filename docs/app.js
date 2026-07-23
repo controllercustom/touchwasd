@@ -1,7 +1,8 @@
-import { ESPLoader, Transport } from 'https://cdn.jsdelivr.net/npm/esptool-js/lib/esptool.js';
+import { ESPLoader, Transport } from 'https://cdn.jsdelivr.net/npm/esptool-js/lib/index.js';
 
 let loader = null;
 let port = null;
+let transport = null;
 
 const els = {
   board: document.getElementById('board'),
@@ -20,9 +21,9 @@ const els = {
 
 const BAUD = 921600;
 
-function log(msg, cls = 'info') {
+function log(msg, cls) {
   const line = document.createElement('div');
-  line.className = cls;
+  line.className = cls || 'info';
   line.textContent = msg;
   els.log.appendChild(line);
   els.log.scrollTop = els.log.scrollHeight;
@@ -88,23 +89,6 @@ function firmwareUrl() {
   return 'firmware/' + version + '/' + board + '/touchwasd.ino.merged.bin';
 }
 
-async function connectSerial() {
-  try {
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate: BAUD });
-    log('Connected', 'success');
-    setStatus('Connected', 'connected');
-    return port;
-  } catch (e) {
-    if (e.name === 'NotFoundError') {
-      log('No port selected', 'warn');
-    } else {
-      log('Serial connection failed: ' + e.message, 'error');
-    }
-    return null;
-  }
-}
-
 async function flash() {
   if (loader) {
     log('Already flashing', 'warn');
@@ -118,15 +102,26 @@ async function flash() {
   }
 
   els.flashBtn.disabled = true;
-  setStatus('Flashing...', 'flashing');
+  setStatus('Connecting...', 'flashing');
 
   try {
-    port = await connectSerial();
+    port = await navigator.serial.requestPort();
     if (!port) {
       els.flashBtn.disabled = false;
       setStatus('Ready', 'ready');
       return;
     }
+
+    transport = new Transport(port);
+    await transport.connect(BAUD);
+    transport.readLoop();
+    log('Connected', 'success');
+    setStatus('Connected', 'connected');
+
+    loader = new ESPLoader({
+      transport,
+      baudrate: BAUD,
+    });
 
     log('Downloading firmware...', 'info');
     const firmwareResp = await fetch(url);
@@ -136,54 +131,54 @@ async function flash() {
     const firmwareData = await firmwareResp.arrayBuffer();
     log('Firmware loaded (' + (firmwareData.byteLength / 1024).toFixed(1) + ' KB)', 'info');
 
-    const transport = new Transport(port);
-    loader = new ESPLoader(transport, BAUD);
-
-    loader.on('progress', (pct, text) => {
-      setProgress(pct * 100, text);
-    });
-
     log('Synchronizing with chip...', 'info');
-    await loader.main();
-    log('Chip: ' + loader.chipName + ' (MAC: ' + loader.macAddr + ')', 'info');
+    const chipDesc = await loader.main();
+    log('Chip: ' + chipDesc, 'info');
 
-    const eraseAll = els.eraseAll.checked;
-    if (eraseAll) {
+    const chipName = loader.chip.CHIP_NAME || 'Unknown';
+    const mac = await loader.chip.readMac(loader);
+    log('Chip: ' + chipName + ' (MAC: ' + mac + ')', 'info');
+
+    if (els.eraseAll.checked) {
       log('Erasing all flash (this takes a while)...', 'warn');
+      await loader.eraseFlash();
+      log('Full flash erase complete', 'info');
     }
 
+    const fileSize = firmwareData.byteLength;
+    const writeSize = loader.FLASH_WRITE_SIZE || 0x400;
+
     log('Flashing firmware...', 'info');
-    await loader.flash({
-      flashSize: 'keep',
-      flashMode: 'keep',
-      flashFreq: 'keep',
-      eraseAll,
-      compress: true,
-      reportProgress: true,
-      partitions: [
-        { address: 0x0, data: new Uint8Array(firmwareData) },
-      ],
-    });
+    setStatus('Flashing...', 'flashing');
+
+    const numBlocks = await loader.flashBegin(fileSize, 0x0);
+
+    for (let seq = 0; seq < numBlocks; seq++) {
+      const offset = seq * writeSize;
+      const end = Math.min(offset + writeSize, fileSize);
+      const chunk = firmwareData.slice(offset, end);
+      await loader.flashBlock(chunk, seq);
+
+      const pct = ((seq + 1) / numBlocks) * 100;
+      setProgress(pct, 'Block ' + (seq + 1) + '/' + numBlocks);
+    }
 
     log('Flashing complete!', 'success');
     setStatus('Done', 'done');
-    clearProgress();
 
-    log('Resetting board...', 'info');
-    await loader.hard_reset();
+    log('Rebooting...', 'info');
+    await loader.flashFinish(true);
 
   } catch (e) {
     log('Error: ' + e.message, 'error');
     setStatus('Error', 'error');
   } finally {
-    try {
-      if (port && port.readable) {
-        await port.close();
-      }
-    } catch (_) {}
+    try { if (transport) await transport.disconnect(); } catch (_) {}
     loader = null;
     port = null;
+    transport = null;
     els.flashBtn.disabled = false;
+    clearProgress();
   }
 }
 

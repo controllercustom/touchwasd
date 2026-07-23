@@ -55,9 +55,17 @@ jobs:
             echo "version=latest" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check if gh-pages branch exists
+        id: check-gh-pages
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout gh-pages for existing firmware
-        id: checkout-gh-pages
-        continue-on-error: true
+        if: steps.check-gh-pages.outputs.exists == 'true'
         uses: actions/checkout@v5
         with:
           ref: gh-pages
