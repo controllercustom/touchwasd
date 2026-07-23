@@ -89,7 +89,7 @@ jobs:
           fi
 
           for board in atoms3 esp32s3; do
-            bdir="build/esp32.esp32.${board}"
+            bdir="build/${board}"
             fdir="deploy/firmware/${VERSION}/${board}"
             mkdir -p "$fdir"
             cp "$bdir/touchwasd.ino.bootloader.bin" "$fdir/bootloader.bin"
