@@ -1,0 +1,116 @@
+name: Build and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.10
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install WiFiManager@2.0.17
+          arduino-cli lib install WebSockets@2.7.2
+          arduino-cli lib install M5GFX@0.2.26
+
+      - name: Build AtomS3
+        run: arduino-cli compile --profile atoms3 . --output-dir build/atoms3
+
+      - name: Build ESP32-S3
+        run: arduino-cli compile --profile esp32s3 . --output-dir build/esp32s3
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout gh-pages for existing firmware
+        id: checkout-gh-pages
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+          fetch-depth: 1
+
+      - name: Prepare deploy directory
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          mkdir -p deploy
+
+          cp -r docs/* deploy/
+          rm -rf deploy/firmware deploy/firmware.json
+
+          if [ -d gh-pages/firmware ]; then
+            cp -r gh-pages/firmware deploy/firmware
+          fi
+          if [ -f gh-pages/firmware.json ]; then
+            cp gh-pages/firmware.json deploy/firmware.json
+          fi
+
+          mkdir -p deploy/firmware/${VERSION}/atoms3
+          mkdir -p deploy/firmware/${VERSION}/esp32s3
+          cp build/atoms3/touchwasd.ino.merged.bin deploy/firmware/${VERSION}/atoms3/
+          cp build/esp32s3/touchwasd.ino.merged.bin deploy/firmware/${VERSION}/esp32s3/
+
+      - name: Generate firmware manifest
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          firmware_dir = 'deploy/firmware'
+          versions = sorted(
+              [d for d in os.listdir(firmware_dir)
+               if os.path.isdir(os.path.join(firmware_dir, d)) and not d.startswith('.')],
+              reverse=True
+          )
+          manifest = {
+              'versions': versions,
+              'latest': versions[0] if versions else None,
+              'boards': {
+                  'esp32s3': {'name': 'Generic ESP32-S3 Dev Module'},
+                  'atoms3':   {'name': 'M5Stack AtomS3'}
+              }
+          }
+          with open('deploy/firmware.json', 'w') as f:
+              json.dump(manifest, f, indent=2)
+          PYEOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: deploy
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

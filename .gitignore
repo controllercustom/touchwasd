@@ -1,2 +1,4 @@
 __pycache__/
 build/
+docs/firmware/
+docs/firmware.json
