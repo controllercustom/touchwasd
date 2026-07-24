@@ -137,6 +137,7 @@ jobs:
       - name: Push firmware to gh-pages branch
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/gh-pages
           cp -r deploy/firmware deploy/firmware.json /tmp/gh-pages/
@@ -146,7 +147,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git add -A
           git commit -m "Firmware $VERSION" --allow-empty
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/gh-pages --force
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/gh-pages --force
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
