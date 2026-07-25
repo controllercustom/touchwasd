@@ -89,11 +89,12 @@ function flashLayout() {
   ];
 }
 
-async function flashRegion(url, address, isLast) {
+async function flashRegion(url, address, regionIndex, totalRegions) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error('Download failed: ' + url + ' HTTP ' + resp.status);
   const data = await resp.arrayBuffer();
-  log(url.split('/').pop() + ' at 0x' + address.toString(16) + ' (' + (data.byteLength / 1024).toFixed(1) + ' KB)', 'info');
+  const fileName = url.split('/').pop();
+  log(fileName + ' at 0x' + address.toString(16) + ' (' + (data.byteLength / 1024).toFixed(1) + ' KB)', 'info');
 
   const numBlocks = await loader.flashBegin(data.byteLength, address);
 
@@ -102,10 +103,14 @@ async function flashRegion(url, address, isLast) {
     const size = Math.min(loader.FLASH_WRITE_SIZE, data.byteLength - offset);
     const chunk = new Uint8Array(data, offset, size);
     await loader.flashBlock(chunk, seq);
+
+    const regionPct = ((seq + 1) / numBlocks) * (100 / totalRegions);
+    const basePct = (regionIndex / totalRegions) * 100;
+    setProgress(basePct + regionPct, fileName + ' — block ' + (seq + 1) + '/' + numBlocks);
   }
 
-  await loader.flashFinish(isLast);
-  if (isLast) {
+  await loader.flashFinish(regionIndex === totalRegions - 1);
+  if (regionIndex === totalRegions - 1) {
     log('Rebooting...', 'info');
   }
 }
@@ -154,8 +159,10 @@ async function flash() {
 
     if (els.eraseAll.checked) {
       log('Erasing all flash (this takes a while)...', 'warn');
+      setProgress(0, 'Erasing...');
       await loader.eraseFlash();
       log('Full flash erase complete', 'info');
+      clearProgress();
     }
 
     log('Flashing firmware...', 'info');
@@ -163,12 +170,12 @@ async function flash() {
 
     for (let i = 0; i < layout.length; i++) {
       const entry = layout[i];
-      const isLast = i === layout.length - 1;
-      await flashRegion(baseUrl + entry.file, entry.address, isLast);
+      await flashRegion(baseUrl + entry.file, entry.address, i, layout.length);
     }
 
     log('Flashing complete!', 'success');
     setStatus('Done', 'done');
+    setProgress(100, 'Complete');
 
   } catch (e) {
     log('Error: ' + e.message, 'error');
@@ -179,7 +186,7 @@ async function flash() {
     port = null;
     transport = null;
     els.flashBtn.disabled = false;
-    clearProgress();
+    setTimeout(clearProgress, 3000);
   }
 }
 
