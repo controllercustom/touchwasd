@@ -39,6 +39,10 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 
 ### 1. Flash the Firmware
 
+#### Web Flasher (No Installation Required)
+
+Open [https://controllercustom.github.io/touchwasd/](https://controllercustom.github.io/touchwasd/) in your browser to flash firmware directly via Web Serial — no Arduino IDE or CLI needed. Select your board type and firmware version, put the device in bootloader mode, and click **Flash Firmware**.
+
 #### Arduino CLI
 
 Pinned builds (use `--profile` instead of `--fqbn` for exact versions from `sketch.yaml`):
@@ -112,11 +116,12 @@ The circle is divided into 8 slices (45° each), centered at 0° (straight up):
 
 Tap the ⚙ cog button to open the settings panel. From here you can:
 
-- **Mode**: toggle between WASD and Arrow keys (persisted on the device)
+- **USB output**: toggle between WASD and Arrow keys (persisted on the device)
 - **Size**: choose Small, Medium, Large, or Full (persisted in browser)
 - **Position**: place the circle at center, top, bottom, or any corner (persisted in browser)
+- **Appearance**: "Clean" shows arrow symbols only; "Labels" adds WASD text and directional hints (default: Clean)
 
-The cog button auto-relocates to avoid overlapping the circle.
+The settings panel adapts to screen size — sections arrange side-by-side on desktops/tablets ≥769px wide, and stack vertically on mobile. Rotating your phone auto-switches between layouts. The cog button also auto-relocates to avoid overlapping the circle.
 
 ### Multiple Devices
 
@@ -196,6 +201,17 @@ Pinned in `sketch.yaml` for reproducible builds:
 | WebSockets | 2.7.2 | Pinned in `sketch.yaml` |
 | M5GFX | 0.2.26 | Pinned in `sketch.yaml` (AtomS3 only) |
 
+
+## Changelog
+
+### v1.0.5 (2026-07-28)
+- **iOS Safari diagonal arrow fix**: appended Unicode variation selector `\uFE0E` to diagonal glyphs (`↗`, `↘`, etc.) so they render as plain text instead of emoji-style buttons on iOS Safari
+- **Diagonal font sizing**: reduced diagonal label sizes (18px primary, 11px secondary) for visual parity with cardinal slices at equal font weight — diagonals are inherently wider glyphs and would otherwise dominate the slice area
+- **Appearance toggle** ("Clean" arrows-only / "Labels" WASD text + directional hints), persisted in `localStorage` as `tw-lk`
+- Responsive settings panel: side-by-side layout on screens ≥769px, vertical stack below
+
+### v1.0.4 (2026-07-28)
+- Initial release with WiFiManager captive portal, OTA updates, and multi-client reference counting
 
 ## Tests
 

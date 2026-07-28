@@ -194,6 +194,7 @@ els.board.addEventListener('change', updateInstructions);
 els.flashBtn.addEventListener('click', flash);
 
 (async function init() {
+  setStatus('Ready', 'ready');
   log('touchWASD Firmware Flasher ready', 'info');
   log('Select a board and version, then click Flash Firmware', 'info');
 

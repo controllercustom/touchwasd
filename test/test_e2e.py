@@ -52,7 +52,7 @@ def find_evdev():
             if ecodes.EV_KEY not in dev.capabilities():
                 dev.close()
                 continue
-            if 'ESP32' not in dev.name:
+            if not any(kw in dev.name for kw in ('ESP32', 'Espressif')):
                 dev.close()
                 continue
             if 'Keyboard' in dev.name:

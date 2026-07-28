@@ -25,9 +25,19 @@ html, body {
 }
 
 .container {
-    max-width: 600px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 24px 16px;
+}
+
+.main-row {
+    display: flex;
+    gap: 16px;
+}
+
+.flash-card, .log-card {
+    flex: 1;
+    min-width: 0;
 }
 
 h1 {
@@ -49,6 +59,10 @@ h1 {
     padding: 20px;
     margin-bottom: 16px;
     border: 1px solid var(--border);
+}
+
+.flash-card, .log-card {
+    margin-bottom: 0;
 }
 
 .form-group {
@@ -262,7 +276,15 @@ select:hover, select:focus {
     margin-top: 4px;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+    .main-row {
+        flex-direction: column;
+    }
+
+    .flash-card, .log-card {
+        margin-bottom: 16px;
+    }
+
     .container {
         padding: 16px 12px;
     }

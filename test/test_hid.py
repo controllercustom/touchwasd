@@ -125,7 +125,7 @@ class TestUsbDescriptor:
             try:
                 name_path = f"{devpath}product"
                 with open(name_path) as f:
-                    if "ESP32" not in f.read():
+                    if not any(kw in f.read() for kw in ("ESP32", "Espressif")):
                         continue
             except (FileNotFoundError, PermissionError):
                 continue

@@ -70,7 +70,7 @@ class HidMonitor:
                     if name_substr in dev.name:
                         return cls(dev)
                 else:
-                    if "ESP32" in dev.name:
+                    if any(kw in dev.name for kw in ("ESP32", "Espressif")):
                         return cls(dev)
         except (OSError, PermissionError):
             return None

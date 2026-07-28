@@ -36,7 +36,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>touchWASD 1.0.4</title>
+    <title>touchWASD 1.0.5</title>
     <style>
         :root {
             --bg: #1a1a2e;
@@ -160,6 +160,42 @@ const char index_html[] PROGMEM = R"rawliteral(
             display: flex;
         }
 
+        .settings-section {
+            background: rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        @media (min-width: 769px) {
+            #settings-panel.open {
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: stretch;
+                justify-content: center;
+                gap: 16px;
+                padding-left: 24px;
+                padding-right: 24px;
+            }
+
+            .settings-section {
+                min-width: 0;
+                flex: 1 1 calc(50% - 8px);
+                max-width: 360px;
+            }
+
+            #settings-panel.open > .close-btn {
+                width: 100%;
+                max-width: 740px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .settings-section {
+                width: min(90vw, 320px);
+            }
+        }
+
         .toggle-btn {
             padding: 10px 24px;
             border-radius: 8px;
@@ -243,29 +279,43 @@ const char index_html[] PROGMEM = R"rawliteral(
     <button id="settings-btn">⚙</button>
 
     <div id="settings-panel">
-        <div class="settings-label">Mode</div>
-        <div class="size-row">
-            <button class="toggle-btn" id="mode-wasd">WASD</button>
-            <button class="toggle-btn" id="mode-arrows">Arrows</button>
+        <div class="settings-section">
+            <div class="settings-label">USB output</div>
+            <div class="size-row">
+                <button class="toggle-btn" id="mode-wasd">WASD</button>
+                <button class="toggle-btn" id="mode-arrows">Arrows</button>
+            </div>
         </div>
 
-        <div class="settings-label">Size</div>
-        <div class="size-row">
-            <button class="size-btn" data-sz="sm">Small</button>
-            <button class="size-btn" data-sz="md">Medium</button>
-            <button class="size-btn active" data-sz="lg">Large</button>
-            <button class="size-btn" data-sz="xl">Full</button>
+        <div class="settings-section">
+            <div class="settings-label">Size</div>
+            <div class="size-row">
+                <button class="size-btn" data-sz="sm">Small</button>
+                <button class="size-btn" data-sz="md">Medium</button>
+                <button class="size-btn active" data-sz="lg">Large</button>
+                <button class="size-btn" data-sz="xl">Full</button>
+            </div>
         </div>
 
-        <div class="settings-label">Position</div>
-        <div class="pos-row">
-            <div></div>       <button class="pos-btn" data-ps="top">↑</button>     <div></div>
-            <button class="pos-btn" data-ps="topleft">↖</button>
-            <button class="pos-btn active" data-ps="center">●</button>
-            <button class="pos-btn" data-ps="topright">↗</button>
-            <button class="pos-btn" data-ps="bottomleft">↙</button>
-            <button class="pos-btn" data-ps="bottom">↓</button>
-            <button class="pos-btn" data-ps="bottomright">↘</button>
+        <div class="settings-section">
+            <div class="settings-label">Position</div>
+            <div class="pos-row">
+                <div></div>       <button class="pos-btn" data-ps="top">↑</button>     <div></div>
+                <button class="pos-btn" data-ps="topleft">↖</button>
+                <button class="pos-btn active" data-ps="center">●</button>
+                <button class="pos-btn" data-ps="topright">↗</button>
+                <button class="pos-btn" data-ps="bottomleft">↙</button>
+                <button class="pos-btn" data-ps="bottom">↓</button>
+                <button class="pos-btn" data-ps="bottomright">↘</button>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-label">Appearance</div>
+            <div class="size-row">
+                <button class="toggle-btn active" id="look-clean">Clean</button>
+                <button class="toggle-btn" id="look-labels">Labels</button>
+            </div>
         </div>
 
         <button class="close-btn" id="settings-close">Close</button>
@@ -277,6 +327,7 @@ let wsRetries = 0;
 let currentMode = 'wasd';
 let currentSz = localStorage.getItem('tw-sz') || 'lg';
 let currentPs = localStorage.getItem('tw-ps') || 'center';
+let currentLook = localStorage.getItem('tw-lk') || 'clean';
 
 const arrowMap = { w: '↑', s: '↓', a: '←', d: '→' };
 
@@ -358,18 +409,35 @@ function renderLabels() {
             midAngle = (sa + ea + 360) / 2;
             if (midAngle >= 360) midAngle -= 360;
         }
-        const isDiag = sl.keys.length === 2;
-        const r = isDiag ? 52 : 48;
 
-        if (!isDiag) {
-            const pt = cxToCart(100, 100, 96, midAngle, r);
+        if (currentLook === 'clean') {
+            const pt = cxToCart(100, 100, 96, midAngle, 48);
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.setAttribute('x', pt.x);
             text.setAttribute('y', pt.y);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dominant-baseline', 'central');
             text.setAttribute('fill', 'white');
-            text.setAttribute('font-size', '22');
+            const isDiag = sl.keys.length === 2;
+            text.setAttribute('font-size', isDiag ? '18' : '22');
+            text.setAttribute('font-weight', 'bold');
+            text.setAttribute('pointer-events', 'none');
+            if (isDiag) {
+                text.textContent = sl.arrow + '\uFE0E';
+            } else {
+                text.textContent = sl.arrow;
+            }
+            g.appendChild(text);
+        } else {
+            const pt = cxToCart(100, 100, 96, midAngle, 48);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', pt.x);
+            text.setAttribute('y', pt.y);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            const isDiag2 = sl.keys.length === 2;
+            text.setAttribute('fill', 'white');
+            text.setAttribute('font-size', isDiag2 ? '18' : '22');
             text.setAttribute('font-weight', 'bold');
             text.setAttribute('pointer-events', 'none');
             if (currentMode === 'arrows') {
@@ -386,31 +454,15 @@ function renderLabels() {
             arrow.setAttribute('text-anchor', 'middle');
             arrow.setAttribute('dominant-baseline', 'central');
             arrow.setAttribute('fill', 'rgba(255,255,255,0.5)');
-            arrow.setAttribute('font-size', '14');
+            const isDiag = sl.keys.length === 2;
+            arrow.setAttribute('font-size', isDiag ? '11' : '14');
             arrow.setAttribute('pointer-events', 'none');
             if (currentMode === 'arrows') {
                 arrow.textContent = '';
             } else {
-                arrow.textContent = sl.arrow;
+                arrow.textContent = isDiag ? sl.arrow + '\uFE0E' : sl.arrow;
             }
             g.appendChild(arrow);
-        } else {
-            const pt = cxToCart(100, 100, 96, midAngle, 48);
-            const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            t.setAttribute('x', pt.x);
-            t.setAttribute('y', pt.y);
-            t.setAttribute('text-anchor', 'middle');
-            t.setAttribute('dominant-baseline', 'central');
-            t.setAttribute('fill', 'white');
-            t.setAttribute('font-size', '16');
-            t.setAttribute('font-weight', 'bold');
-            t.setAttribute('pointer-events', 'none');
-            if (currentMode === 'arrows') {
-                t.textContent = sl.keys.map(k => arrowMap[k]).join('');
-            } else {
-                t.textContent = sl.label;
-            }
-            g.appendChild(t);
         }
     });
 }
@@ -586,6 +638,8 @@ settingsBtn.addEventListener('click', function(e) {
     updateModeButtons();
     document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b.dataset.sz === currentSz));
     document.querySelectorAll('.pos-btn').forEach(b => b.classList.toggle('active', b.dataset.ps === currentPs));
+    document.getElementById('look-clean').classList.toggle('active', currentLook === 'clean');
+    document.getElementById('look-labels').classList.toggle('active', currentLook === 'labels');
 });
 
 closeBtn.addEventListener('click', function(e) {
@@ -611,6 +665,22 @@ document.getElementById('mode-arrows').addEventListener('click', function() {
 function updateModeButtons() {
     document.getElementById('mode-wasd').classList.toggle('active', currentMode === 'wasd');
     document.getElementById('mode-arrows').classList.toggle('active', currentMode === 'arrows');
+}
+
+document.getElementById('look-clean').addEventListener('click', function() {
+    setLook('clean');
+});
+
+document.getElementById('look-labels').addEventListener('click', function() {
+    setLook('labels');
+});
+
+function setLook(look) {
+    currentLook = look;
+    localStorage.setItem('tw-lk', look);
+    document.getElementById('look-clean').classList.toggle('active', currentLook === 'clean');
+    document.getElementById('look-labels').classList.toggle('active', currentLook === 'labels');
+    draw();
 }
 
 document.addEventListener('contextmenu', function(e) { e.preventDefault(); });

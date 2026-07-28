@@ -112,8 +112,9 @@ Two tools measure latency:
 - SVG-based 8-segment circle (outer r=96, inner r=28) rendered using `<path>` arcs
 - Pointer Events API for touch: `pointerdown`/`pointermove`/`pointerup`/`pointercancel`
 - Slide-typing across slices via `document.elementFromPoint()` in `pointermove`
-- Settings panel: cog button opens mode toggle (WASD vs Arrows), 4 sizes (sm/md/lg/xl), and 7 positions (center/top/bottom/topleft/topright/bottomleft/bottomright)
-- Size and position persisted client-side via `localStorage` (`tw-sz`, `tw-ps`)
+- Settings panel (cog button): "USB output" toggle (WASD vs Arrows), 4 sizes, 7 positions, and Appearance toggle ("Clean" arrows-only or "Labels" with WASD text + directional hints)
+- Client-side persistence via `localStorage`: size (`tw-sz`), position (`tw-ps`), appearance look (`tw-lk`)
+- Landscape layout: on screens ≥769px wide, settings sections arrange side-by-side in a flex row. Mobile (≤768px) stacks vertically. Rotating a phone auto-switches based on viewport width.
 - Gear button auto-relocates to the opposite corner when the circle is at any edge position (e.g. top→bottom-left, bottom-right→top-left, etc.) to avoid overlap
 
 ## Tests
@@ -130,7 +131,7 @@ python3 -m pytest test/ --host 192.168.1.xxx -v
 
 The `--host` flag switches `MockTouchWASDDevice` for a `LiveTouchWASDDevice` connection to the real device; without it the full suite runs against the in-process mock. The optional `--hid-name <substring>` flag overrides auto-detection of the USB HID keyboard name (e.g., `--hid-name "ESP32S3_DEV"`).
 
-With `python3-evdev` installed and the device's USB HID keyboard visible to the host (`/dev/input/event*`, user must be in the **input** group on Ubuntu 24.04+), the live tests also assert the **actual USB HID keystrokes** the device emits, read from `EVIOCGKEY` via evdev — see `test/test_hid.py`. The keyboard name is auto-detected by matching any ESP32 keyboard device (AtomS3, generic S3 DevKit, etc.). Without evdev or HID access, those assertions are skipped and only protocol-level checks run.
+With `python3-evdev` installed and the device's USB HID keyboard visible to the host (`/dev/input/event*`, user must be in the **input** group on Ubuntu 24.04+), the live tests also assert the **actual USB HID keystrokes** the device emits, read from `EVIOCGKEY` via evdev — see `test/test_hid.py`. The keyboard name is auto-detected by matching `"ESP32"` or `"Espressif"` in the device name (covers AtomS3 which reports as `"M5STACK_ATOMS3"`, generic S3 DevKit, etc.). Without evdev or HID access, those assertions are skipped and only protocol-level checks run.
 
 ### `test/test_core.py` — Unit tests (stdlib only, no dependencies)
 - `charToHID()` lookup table validation against every ASCII character
