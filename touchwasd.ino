@@ -49,7 +49,7 @@
 #    include <TFT_eSPI.h>
 #  endif
 #endif
-#define VERSION "1.0.5"
+#define VERSION "1.1.0"
 
 // Standard USB HID usage IDs for arrow keys (passed directly to pressRaw/releaseRaw)
 #define KEY_UP    0x52
