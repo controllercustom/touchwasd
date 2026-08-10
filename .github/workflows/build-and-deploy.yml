@@ -23,9 +23,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install arduino-cli
+      - name: Install arduino-cli 1.5.1
         run: |
-          wget -q -O /tmp/arduino-cli.tar.gz https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz
+          wget -q -O /tmp/arduino-cli.tar.gz https://github.com/arduino/arduino-cli/releases/download/v1.5.1/arduino-cli_1.5.1_Linux_64bit.tar.gz
           tar xzf /tmp/arduino-cli.tar.gz -C /usr/local/bin
           arduino-cli version
 
@@ -45,6 +45,12 @@ jobs:
 
       - name: Build ESP32-S3
         run: arduino-cli compile --profile esp32s3 . --output-dir build/esp32s3
+
+      - name: Build T-Dongle-S3
+        run: arduino-cli compile --profile tdongle_s3 . --output-dir build/tdongle_s3
+
+      - name: Build T-Dongle-S3-Plus
+        run: arduino-cli compile --profile tdongle_s3_plus . --output-dir build/tdongle_s3_plus --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
 
       - name: Determine version
         id: version
@@ -88,7 +94,7 @@ jobs:
             cp gh-pages/firmware.json deploy/firmware.json
           fi
 
-          for board in atoms3 esp32s3; do
+          for board in atoms3 esp32s3 tdongle_s3 tdongle_s3_plus; do
             bdir="build/${board}"
             fdir="deploy/firmware/${VERSION}/${board}"
             mkdir -p "$fdir"
@@ -127,7 +133,9 @@ jobs:
               'flashLayout': FLASH_LAYOUT,
               'boards': {
                   'esp32s3': {'name': 'Generic ESP32-S3 Dev Module'},
-                  'atoms3':   {'name': 'M5Stack AtomS3'}
+                  'atoms3':   {'name': 'M5Stack AtomS3'},
+                  'tdongle_s3':       {'name': 'LilyGo T-Dongle-S3'},
+                  'tdongle_s3_plus':  {'name': 'LilyGo T-Dongle-S3-Plus'}
               }
           }
           with open('deploy/firmware.json', 'w') as f:

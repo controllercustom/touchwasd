@@ -37,6 +37,18 @@
 #ifdef ARDUINO_M5STACK_ATOMS3
 #include <M5GFX.h>
 #endif
+// T-Dongle-S3 / T-Dongle-S3-Plus detection: the vendored TFT_eSPI library
+// (libraries/TFT_eSPI, configured for the 160x80 ST7735) is only present on
+// the tdongle_s3* profiles, so probe the include path at preprocess time.
+// Require hardware-CDC USB mode (ARDUINO_USB_MODE==1, i.e. USBMode=hwcdc, which
+// all tdongle_s3* profiles select) so a stray global TFT_eSPI can never enable
+// the T-Dongle display path on AtomS3 / generic ESP32-S3 builds.
+#if defined(__has_include)
+#  if __has_include(<TFT_eSPI.h>) && defined(ARDUINO_USB_MODE) && (ARDUINO_USB_MODE == 1)
+#    define T_DONGLE_S3
+#    include <TFT_eSPI.h>
+#  endif
+#endif
 #define VERSION "1.0.5"
 
 // Standard USB HID usage IDs for arrow keys (passed directly to pressRaw/releaseRaw)
@@ -52,6 +64,9 @@ USBHIDKeyboard keyboard;
 #ifdef ARDUINO_M5STACK_ATOMS3
 M5GFX display;
 #endif
+#ifdef T_DONGLE_S3
+TFT_eSPI display;
+#endif
 WebServer server(80);
 WebSocketsServer webSocket(81);
 
@@ -63,6 +78,8 @@ WiFiManagerParameter customHostnameParam("hostname", "Device hostname", "touchwa
 
 #ifdef ARDUINO_M5STACK_ATOMS3
 #define RESET_BUTTON_PIN 41
+#elif defined(T_DONGLE_S3)
+#define RESET_BUTTON_PIN 0
 #else
 #define RESET_BUTTON_PIN 0
 #endif
@@ -220,6 +237,50 @@ static void updateDisplay() {
   display.printf("Mode: %s", currentMode == MODE_WASD ? "WASD" : "Arrows");
   display.printf("\nClients: %d", wsClientCount);
 }
+#elif defined(T_DONGLE_S3)
+// Truncate a line so it fits the 160px wide panel at the current font size
+// (font 2 is 16px high but ~8px per char wide, so long hostnames would clip).
+static void printClipped(const char* s) {
+  char buf[64];
+  snprintf(buf, sizeof(buf), "%s", s);
+  while (buf[0] != '\0' && display.textWidth(buf) > 160) {
+    buf[strlen(buf) - 1] = '\0';
+  }
+  display.println(buf);
+}
+
+static void bootMsg(const char* s1, const char* s2, const char* s3) {
+  display.fillScreen(TFT_BLACK);
+  display.setCursor(0, 0);
+  display.setTextFont(2);
+  display.setTextColor(TFT_CYAN, TFT_BLACK);
+  display.printf("touchWASD v%s", VERSION);
+  display.setTextColor(TFT_WHITE, TFT_BLACK);
+  int y = 16;
+  if (s1) { display.setCursor(0, y); printClipped(s1); y += 16; }
+  if (s2) { display.setCursor(0, y); printClipped(s2); y += 16; }
+  if (s3) { display.setCursor(0, y); printClipped(s3); }
+}
+
+static void updateDisplay() {
+  display.fillScreen(TFT_BLACK);
+  display.setCursor(0, 0);
+  display.setTextFont(2);
+  display.setTextColor(TFT_CYAN, TFT_BLACK);
+  display.printf("touchWASD v%s", VERSION);
+  display.setTextColor(TFT_WHITE, TFT_BLACK);
+  int y = 16;
+  if (WiFi.status() == WL_CONNECTED) {
+    display.setCursor(0, y); display.println(WiFi.localIP()); y += 16;
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%s.local", hostname);
+    display.setCursor(0, y); printClipped(buf); y += 16;
+  } else {
+    display.setCursor(0, y); display.println("No WiFi"); y += 16;
+  }
+  display.setCursor(0, y); display.printf("Mode: %s", currentMode == MODE_WASD ? "WASD" : "Arrows"); y += 16;
+  display.setCursor(0, y); display.printf("Clients: %d", wsClientCount);
+}
 #else
 static void bootMsg(const char*, const char*, const char*) {}
 static void updateDisplay() {}
@@ -230,9 +291,19 @@ void setup() {
   delay(500);
   setCpuFrequencyMhz(240);
   Serial.println("\n[INIT] Starting touchWASD...");
+#ifdef T_DONGLE_S3_PLUS
+  Serial.println("[BOARD] LilyGo T-Dongle-S3-Plus");
+#elif defined(T_DONGLE_S3)
+  Serial.println("[BOARD] LilyGo T-Dongle-S3");
+#endif
 
 #ifdef ARDUINO_M5STACK_ATOMS3
   display.begin();
+#elif defined(T_DONGLE_S3)
+  display.init();
+  display.setRotation(1);
+  pinMode(38, OUTPUT);
+  digitalWrite(38, 0);
 #endif
   bootMsg("Starting...", nullptr, nullptr);
 
@@ -391,7 +462,7 @@ static void handleResetButton(unsigned long now) {
   } else if (resetPressed && resetButtonWasLow) {
     if (now - resetPressStart >= 5000) {
       Serial.println("[WiFi] Button held 5s — erasing credentials and rebooting");
-#ifdef ARDUINO_M5STACK_ATOMS3
+#if defined(ARDUINO_M5STACK_ATOMS3) || defined(T_DONGLE_S3)
       bootMsg("Resetting", "WiFi...", nullptr);
 #endif
       delay(100);
@@ -411,12 +482,14 @@ void loop() {
   ArduinoOTA.handle();
   unsigned long now = millis();
 
+#ifdef TIMING_OUTPUT
   // Print timing data when a key action has been processed
   if (_t_hid_send > _t_ws_key) {
     Serial.printf("[TIMING] ws=%llu hid=%llu fw_us=%llu\n",
       _t_ws_key, _t_hid_send, _t_hid_send - _t_ws_key);
     _t_ws_key = _t_hid_send = 0;
   }
+#endif
 
   handleWdt(now);
   handleResetButton(now);

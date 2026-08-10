@@ -1,6 +1,6 @@
 # touchWASD — Touchscreen WASD USB Keyboard
 
-touchWASD turns an M5Stack AtomS3 (or any ESP32-S3) into a USB HID keyboard controlled by a circular touch overlay on your phone or tablet. Open a browser, touch a direction on the circle, and the corresponding WASD or arrow key is pressed on your computer — no software to install on the target machine.
+touchWASD turns an M5Stack AtomS3, a LilyGo T-Dongle-S3 / T-Dongle-S3-Plus (or any ESP32-S3) into a USB HID keyboard controlled by a circular touch overlay on your phone or tablet. Open a browser, touch a direction on the circle, and the corresponding WASD or arrow key is pressed on your computer — no software to install on the target machine.
 
 ```
 [ Phone/Tablet ] --WiFi--> [ AtomS3 ] --USB--> [ Computer ]
@@ -26,12 +26,13 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 - **Customizable mDNS hostname** — default `touchwasd.local`, configurable in the captive portal
 - **OTA updates** — upload firmware wirelessly via native arduino-cli, `espota.py`, or browser (`/update`)
 - **AtomS3 display** — shows IP, hostname, mode, and client count on the built-in 128×128 screen
+- **T-Dongle-S3 display** — same status on the 160×80 ST7735 screen (T-Dongle-S3 / T-Dongle-S3-Plus)
 
 ## Hardware Requirements
 
 | Component | Required | Notes |
 |---|---|---|
-| ESP32-S3 with native USB | Yes | M5Stack AtomS3 recommended; any ESP32-S3 works |
+| ESP32-S3 with native USB | Yes | M5Stack AtomS3, LilyGo T-Dongle-S3 / T-Dongle-S3-Plus recommended; any ESP32-S3 works |
 | USB-C cable | Yes | Connects ESP32 to target computer |
 | Phone / Tablet | Yes | Any device with a web browser |
 
@@ -57,12 +58,31 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn "esp32:esp32:m5stack_atoms3:PartitionS
 arduino-cli compile --profile esp32s3 .
 # Serial upload (port is typically /dev/ttyUSB0 or /dev/ttyACMx)
 arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
+
+# LilyGo T-Dongle-S3 (pinned via sketch.yaml)
+arduino-cli compile --profile tdongle_s3 .
+# Serial upload (native USB CDC, typically /dev/ttyACM0; hold BOOT while plugging in)
+arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3 .
+
+# LilyGo T-Dongle-S3-Plus (same as base, but define T_DONGLE_S3_PLUS)
+arduino-cli compile --profile tdongle_s3_plus . --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
+arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3_plus .
 ```
+
+> **T-Dongle-S3 note**: the display needs the vendored `TFT_eSPI` library shipped in
+> `libraries/TFT_eSPI` (configured for the 160×80 ST7735). It is auto-detected at
+> compile time via `__has_include(<TFT_eSPI.h>)` — no code changes needed. The board
+> requires a **16 MB flash** FQBN and `USBMode=hwcdc,CDCOnBoot=cdc` for the serial port
+> to exist; hold the **BOOT** button while plugging in USB to enter download mode.
+
+> **Flash from a different computer**: the `upload/` directory carries precompiled
+> binaries and `./upload.sh` / `./upload_plus.sh` scripts for both T-Dongle-S3 boards.
+> Copy `upload/` to the machine with the board and run `./upload.sh [PORT]`.
 
 #### Arduino IDE
 
 1. Add `https://espressif.github.io/arduino-esp32/package_esp32_index.json` to *Additional Boards Manager URLs*
-2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**. The USB HID keyboard library is built into the ESP32 core — no additional install needed.
+2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**, and **TFT_eSPI** (T-Dongle-S3 only, see `libraries/`). The USB HID keyboard library is built into the ESP32 core — no additional install needed.
 3. Select **M5AtomS3** (or **ESP32S3 Dev Module** for generic boards)
 4. Set *Tools → USB Mode → **USB-OTG (TinyUSB)***
 5. Set *Tools → USB CDC On Boot → **Disabled***
@@ -152,6 +172,16 @@ arduino-cli compile --profile atoms3 . --output-dir /tmp/touchwasd-build \
 
 Or use the web interface at `http://touchwasd.local/update`.
 
+OTA works identically for the T-Dongle-S3 / T-Dongle-S3-Plus boards — compile with their profile and pass the device IP to `--protocol network`:
+
+```bash
+arduino-cli compile --profile tdongle_s3 . \
+  && arduino-cli upload -p <ip> --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,LoopCore=1" \
+  --upload-field port=3232 --upload-field password="" \
+  --protocol network \
+  .
+```
+
 ### OTA Password
 
 By default, OTA updates require no password — anyone on your network can upload firmware. To enable password protection:
@@ -171,6 +201,7 @@ Hold the built-in button for 5 seconds:
 
 - **AtomS3**: hold GPIO41 button (display shows "Resetting WiFi...")
 - **Generic**: hold BOOT button (GPIO0)
+- **T-Dongle-S3 / T-Dongle-S3-Plus**: hold BOOT button (GPIO0)
 
 WiFi credentials are erased and the device reboots into the `touchWASD-Config` captive portal.
 
@@ -181,6 +212,7 @@ WiFi credentials are erased and the device reboots into the `touchWASD-Config` c
 ```
 AtomS3:   esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default
 Generic:  esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
+T-Dongle-S3 / Plus: esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,LoopCore=1
 ```
 
 ### Required Libraries
@@ -188,6 +220,7 @@ Generic:  esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
 - **WiFiManager** by tzapu
 - **WebSockets** by Markus Sattler
 - **M5GFX** by M5Stack (AtomS3 only — optional for generic boards)
+- **TFT_eSPI** by Bodmer — vendored in `libraries/TFT_eSPI` (T-Dongle-S3 / Plus only, configured for the 160×80 ST7735)
 - USB HID keyboard is built into the ESP32 core (`USB.h`) — no additional library needed
 
 ### Versions
@@ -200,6 +233,7 @@ Pinned in `sketch.yaml` for reproducible builds:
 | WiFiManager | 2.0.17 | Pinned in `sketch.yaml` |
 | WebSockets | 2.7.2 | Pinned in `sketch.yaml` |
 | M5GFX | 0.2.26 | Pinned in `sketch.yaml` (AtomS3 only) |
+| TFT_eSPI | 2.5.43 | Vendored in `libraries/TFT_eSPI` (T-Dongle-S3 only) |
 
 
 ## Changelog
@@ -250,7 +284,7 @@ With `python3-evdev` installed and the device's USB HID keyboard visible to the 
 ### `test/test_e2e.py` — Latency measurement (standalone, no pytest)
 - Sends key presses over WebSocket, observes HID arrival via evdev `select.select()`
 - Measures end-to-end latency (WS send → USB HID on host) with statistical report
-- Optional `--serial` flag reads `[TIMING]` markers for firmware processing time split
+- Optional `--serial` flag reads `[TIMING]` markers for firmware processing time split (requires firmware compiled with `-DTIMING_OUTPUT`)
 - Configurable pass/fail threshold (default 20ms p99)
 - Usage: `python3 test/test_e2e.py --host <ip> [--serial /dev/ttyUSB0] [--samples 50]`
 

@@ -6,6 +6,7 @@ Web-based WASD/Arrow key USB HID keyboard. ESP32-S3 hosts a WebSocket server tha
 ## Hardware
 - **Primary**: M5Stack AtomS3 (`esp32:esp32:m5stack_atoms3`)
 - **Alternative**: Generic ESP32-S3 Dev Module (`esp32:esp32:esp32s3`)
+- **T-Dongle-S3 / T-Dongle-S3-Plus**: LilyGo (`esp32:esp32:esp32s3` + 16M flash / hwcdc FQBN, see profiles `tdongle_s3` / `tdongle_s3_plus`)
 
 ## Key Technical Details
 - **USB HID**: Built on the ESP32 core's built-in `USBHIDKeyboard` class (`#include <USB.h>`). Uses a standard keyboard-only report descriptor (no mouse/consumer interfaces). Sends 8-byte boot keyboard reports via `pressRaw()`/`releaseRaw()`.
@@ -16,8 +17,9 @@ Web-based WASD/Arrow key USB HID keyboard. ESP32-S3 hosts a WebSocket server tha
 - **mDNS**: Default `touchwasd.local`; configurable via "Device hostname" field in the WiFiManager captive portal.
 - **OTA**: ArduinoOTA enabled — upload via `espota.py` at `<hostname>.local:3232`. Web OTA at `http://<hostname>.local/update`. Optional password authentication via `#define OTA_PASS` (default commented out) in source (see README).
 - **Diagnostics**: Serial monitor at 115200 baud.
-- **Display (AtomS3 only)**: Shows IP, hostname, mode (WASD/Arrows), and client count. Uses M5GFX library.
-- **Physical reset**: Hold the built-in button 5s (AtomS3 GPIO41 / generic BOOT GPIO0) to erase WiFi credentials and reboot into the `touchWASD-Config` captive portal.
+- **Display (AtomS3)**: Shows IP, hostname, mode (WASD/Arrows), and client count. Uses M5GFX library.
+- **Display (T-Dongle-S3 / Plus)**: Same status on the 160×80 ST7735 via **vendored TFT_eSPI** (`libraries/TFT_eSPI`, version 2.5.43). Auto-detected at compile time with `__has_include(<TFT_eSPI.h>)` **and** `ARDUINO_USB_MODE == 1` (i.e. `USBMode=hwcdc`, which all tdongle profiles select) → defines `T_DONGLE_S3`. The USB-mode guard prevents a stray global TFT_eSPI from enabling the T-Dongle path on AtomS3/generic builds. The vendored library's `User_Setups/Setup47_ST7735.h` is the T-Dongle-S3 config (ST7735 GREENTAB160x80, BGR, pins MOSI=3 SCLK=5 CS=4 DC=2 RST=1, backlight GPIO38 active-low 0=on). Do not add/remove that marker. The Plus is the same board plus `-DT_DONGLE_S3_PLUS` (only used for a boot banner; display/reset identical).
+- **Physical reset**: Hold the built-in button 5s (AtomS3 GPIO41 / generic & T-Dongle-S3 BOOT GPIO0) to erase WiFi credentials and reboot into the `touchWASD-Config` captive portal.
 
 ## Modes
 - **WASD mode** (default): `w`, `a`, `s`, `d` keycodes via `charToHID()` lookup table
@@ -48,11 +50,22 @@ arduino-cli compile --profile atoms3 .
 # Generic ESP32-S3 (pinned via sketch.yaml)
 arduino-cli compile --profile esp32s3 .
 
+# LilyGo T-Dongle-S3 (pinned via sketch.yaml; vendored TFT_eSPI from libraries/)
+arduino-cli compile --profile tdongle_s3 .
+
+# LilyGo T-Dongle-S3-Plus (same FQBN as base; define T_DONGLE_S3_PLUS for the banner)
+arduino-cli compile --profile tdongle_s3_plus . --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
+
 # Serial upload — AtomS3: hold Reset button 2-3s for download mode (LED turns green)
 arduino-cli upload -p /dev/ttyACM0 --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
 
 # Serial upload — Generic ESP32-S3 (port is typically /dev/ttyUSB0 or /dev/ttyACMx)
 arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default" .
+
+# Serial upload — T-Dongle-S3 / Plus (native USB CDC, typically /dev/ttyACM0;
+# hold BOOT while plugging in to enter download mode)
+arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3 .
+arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3_plus .
 
 # Native OTA upload (arduino-cli 1.5.1+). Pass the device IP (or hostname) directly
 # to `-p` with `--protocol network` (without it arduino-cli tries to open the
@@ -70,6 +83,29 @@ arduino-cli compile --profile atoms3 . --output-dir /tmp/touchwasd-build \
   && python3 ~/.arduino15/packages/esp32/hardware/esp32/3.3.10/tools/espota.py \
   -i <ip> -p 3232 -f /tmp/touchwasd-build/touchwasd.ino.bin -r -d
 # If OTA password is enabled, add: -a "<password>"
+
+## Flashing from a different computer (`upload/`)
+
+The T-Dongle-S3 boards are usually flashed from a machine that does NOT build
+the firmware. The handoff payload lives in `upload/` (kept trackable via
+`.gitignore` exceptions despite the `build/` rule):
+
+- `upload/build/tdongle_s3/` and `upload/build/tdongle_s3_plus/` — precompiled
+  binaries (`touchwasd.ino.bin`, `.bootloader.bin`, `.partitions.bin`,
+  `.merged.bin`, `boot_app0.bin`).
+- `upload/upload.sh` (base) / `upload/upload_plus.sh` (Plus) — install the
+  `esp32:esp32` core if missing, then `arduino-cli upload --input-dir`.
+
+Usage on the target machine: `./upload.sh [PORT]` (default `/dev/ttyACM0`).
+After changing the sketch you MUST refresh these binaries, e.g.:
+
+```bash
+arduino-cli compile --profile tdongle_s3 . --output-dir upload/build/tdongle_s3
+arduino-cli compile --profile tdongle_s3_plus . --output-dir upload/build/tdongle_s3_plus \
+  --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
+cp ~/.arduino15/packages/esp32/hardware/esp32/*/tools/partitions/boot_app0.bin \
+  upload/build/tdongle_s3/ upload/build/tdongle_s3_plus/
+```
 
 ## Latency Optimization
 
@@ -100,6 +136,8 @@ Two tools measure latency:
   ```bash
   python3 test/measure_latency.py --host <ip> --samples 50
   ```
+
+> **`[TIMING]` output is opt-in**: compile with `-DTIMING_OUTPUT` (e.g. `--build-property build.extra_flags=-DTIMING_OUTPUT`) to enable the firmware processing time marker. Without it, no UART timing data is emitted on the hot path.
 
 ## Key Design Decisions (from ikeys)
 - **Reference counting**: `keyRefCount[256]` enables multi-client support. Two clients pressing `w` simultaneously increment the ref count; one releasing does not release the key.

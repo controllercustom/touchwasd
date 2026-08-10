@@ -1,4 +1,12 @@
 __pycache__/
 build/
+# The precompiled firmware + upload scripts in upload/ are the "flash on another
+# computer" handoff payload — keep them trackable despite the build/ rule above.
+!upload/build/
+!upload/build/**
+# arduino-cli --output-dir also emits large build artifacts; only the .bin files
+# (and boot_app0.bin) are needed for the upload scripts.
+upload/build/**/*.elf
+upload/build/**/*.map
 docs/firmware/
 docs/firmware.json

@@ -26,6 +26,8 @@
                     <select id="board">
                         <option value="atoms3">M5Stack AtomS3</option>
                         <option value="esp32s3">Generic ESP32-S3 Dev Module</option>
+                        <option value="tdongle_s3">LilyGo T-Dongle-S3</option>
+                        <option value="tdongle_s3_plus">LilyGo T-Dongle-S3-Plus</option>
                     </select>
                 </div>
 
@@ -66,6 +68,7 @@
                     <li>Release the button</li>
                     <li>The device is now in download mode (green LED indicates bootloader mode)</li>
                     <li>Click <strong>Flash Firmware</strong> above and select the device in the browser serial prompt</li>
+                    <li>After flashing, re-power the device — or tap the side button to reset it — to boot the new firmware</li>
                 </ol>
             </div>
 
@@ -78,6 +81,32 @@
                     <li>Release the <span class="key">BOOT</span> button</li>
                     <li>The device is now in download mode</li>
                     <li>Click <strong>Flash Firmware</strong> above and select the device in the browser serial prompt</li>
+                    <li>After flashing, the board auto-resets via RTS/DTR when uploaded through the <strong>UART</strong> port (USB-UART bridge)</li>
+                    <li>If you uploaded via the <strong>native USB</strong> port instead, RTS/DTR reset does not work — re-power the board to boot the new firmware</li>
+                </ol>
+            </div>
+
+            <div id="tdongle_s3-info" class="hidden">
+                <h3>LilyGo T-Dongle-S3</h3>
+                <ol>
+                    <li>Connect the T-Dongle-S3 to your computer via USB-C</li>
+                    <li>Press and <strong>hold</strong> the <span class="key">BOOT</span> button (<span class="key">GPIO0</span>) while plugging in the USB cable</li>
+                    <li>Release the <span class="key">BOOT</span> button once connected</li>
+                    <li>The device is now in download mode</li>
+                    <li>Click <strong>Flash Firmware</strong> above and select the device in the browser serial prompt</li>
+                    <li>After flashing, unplug and re-power the device <em>without</em> holding <span class="key">BOOT</span> to boot the new firmware</li>
+                </ol>
+            </div>
+
+            <div id="tdongle_s3_plus-info" class="hidden">
+                <h3>LilyGo T-Dongle-S3-Plus</h3>
+                <ol>
+                    <li>Connect the T-Dongle-S3-Plus to your computer via USB-C</li>
+                    <li>Press and <strong>hold</strong> the <span class="key">BOOT</span> button (<span class="key">GPIO0</span>) while plugging in the USB cable</li>
+                    <li>Release the <span class="key">BOOT</span> button once connected</li>
+                    <li>The device is now in download mode</li>
+                    <li>Click <strong>Flash Firmware</strong> above and select the device in the browser serial prompt</li>
+                    <li>After flashing, unplug and re-power the device <em>without</em> holding <span class="key">BOOT</span> to boot the new firmware</li>
                 </ol>
             </div>
         </div>

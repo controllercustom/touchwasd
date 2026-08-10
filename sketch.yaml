@@ -18,3 +18,29 @@ profiles:
       - WiFiManager (2.0.17)
       - WebSockets (2.7.2)
 
+  tdongle_s3:
+    notes: LilyGo T-Dongle-S3 - 160x80 ST7735 via vendored TFT_eSPI
+    fqbn: esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,LoopCore=1
+    platforms:
+      - platform: esp32:esp32 (3.3.10)
+        platform_index_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+    port_config:
+      baudrate: 115200
+    libraries:
+      - WiFiManager (2.0.17)
+      - WebSockets (2.7.2)
+      - dir: libraries/TFT_eSPI
+
+  tdongle_s3_plus:
+    notes: LilyGo T-Dongle-S3-Plus - same display as base; build with -DT_DONGLE_S3_PLUS
+    fqbn: esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,LoopCore=1
+    platforms:
+      - platform: esp32:esp32 (3.3.10)
+        platform_index_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+    port_config:
+      baudrate: 115200
+    libraries:
+      - WiFiManager (2.0.17)
+      - WebSockets (2.7.2)
+      - dir: libraries/TFT_eSPI
+
