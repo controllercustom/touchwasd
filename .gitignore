@@ -10,3 +10,4 @@ upload/build/**/*.elf
 upload/build/**/*.map
 docs/firmware/
 docs/firmware.json
+upload/

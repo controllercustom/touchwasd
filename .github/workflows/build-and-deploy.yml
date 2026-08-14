@@ -32,13 +32,14 @@ jobs:
       - name: Install ESP32 core
         run: |
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32@3.3.10
+          arduino-cli core install esp32:esp32@3.3.10 esp32:esp32@3.2.0
 
       - name: Install libraries
         run: |
           arduino-cli lib install WiFiManager@2.0.17
           arduino-cli lib install WebSockets@2.7.2
           arduino-cli lib install M5GFX@0.2.26
+          arduino-cli lib install "GFX Library for Arduino@1.6.0"
 
       - name: Build AtomS3
         run: arduino-cli compile --profile atoms3 . --output-dir build/atoms3
@@ -51,6 +52,9 @@ jobs:
 
       - name: Build T-Dongle-S3-Plus
         run: arduino-cli compile --profile tdongle_s3_plus . --output-dir build/tdongle_s3_plus --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
+
+      - name: Build Waveshare
+        run: arduino-cli compile --profile waveshare . --output-dir build/waveshare --build-property compiler.cpp.extra_flags=-DT_WAVESHARE_154
 
       - name: Determine version
         id: version
@@ -94,7 +98,7 @@ jobs:
             cp gh-pages/firmware.json deploy/firmware.json
           fi
 
-          for board in atoms3 esp32s3 tdongle_s3 tdongle_s3_plus; do
+          for board in atoms3 esp32s3 tdongle_s3 tdongle_s3_plus waveshare; do
             bdir="build/${board}"
             fdir="deploy/firmware/${VERSION}/${board}"
             mkdir -p "$fdir"
@@ -135,7 +139,8 @@ jobs:
                   'esp32s3': {'name': 'Generic ESP32-S3 Dev Module'},
                   'atoms3':   {'name': 'M5Stack AtomS3'},
                   'tdongle_s3':       {'name': 'LilyGo T-Dongle-S3'},
-                  'tdongle_s3_plus':  {'name': 'LilyGo T-Dongle-S3-Plus'}
+                  'tdongle_s3_plus':  {'name': 'LilyGo T-Dongle-S3-Plus'},
+                  'waveshare':        {'name': 'Waveshare ESP32-S3-Touch-LCD-1.54'}
               }
           }
           with open('deploy/firmware.json', 'w') as f:

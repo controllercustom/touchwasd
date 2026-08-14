@@ -27,6 +27,7 @@ Perfect for gaming, presentations, KVM control, or any situation where you want 
 - **OTA updates** — upload firmware wirelessly via native arduino-cli, `espota.py`, or browser (`/update`)
 - **AtomS3 display** — shows IP, hostname, mode, and client count on the built-in 128×128 screen
 - **T-Dongle-S3 display** — same status on the 160×80 ST7735 screen (T-Dongle-S3 / T-Dongle-S3-Plus)
+- **Waveshare ESP32-S3-Touch-LCD-1.54 display** — same status on the 1.54" 240×240 ST7789 screen
 
 ## Hardware Requirements
 
@@ -67,13 +68,30 @@ arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3 .
 # LilyGo T-Dongle-S3-Plus (same as base, but define T_DONGLE_S3_PLUS)
 arduino-cli compile --profile tdongle_s3_plus . --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
 arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3_plus .
+
+# Waveshare ESP32-S3-Touch-LCD-1.54 (240x240 ST7789 via Arduino_GFX / GFX Library for Arduino 1.6.0)
+arduino-cli compile --profile waveshare . --build-property compiler.cpp.extra_flags=-DT_WAVESHARE_154
+# Native USB CDC, typically /dev/ttyACM0; hold BOOT while plugging in, then power-cycle
+arduino-cli upload -p /dev/ttyACM0 --profile waveshare .
 ```
 
 > **T-Dongle-S3 note**: the display needs the vendored `TFT_eSPI` library shipped in
 > `libraries/TFT_eSPI` (configured for the 160×80 ST7735). It is auto-detected at
-> compile time via `__has_include(<TFT_eSPI.h>)` — no code changes needed. The board
+> compile time via `__has_include(<TFT_eSPI.h>)`. No code changes needed. The board
 > requires a **16 MB flash** FQBN and `USBMode=hwcdc,CDCOnBoot=cdc` for the serial port
 > to exist; hold the **BOOT** button while plugging in USB to enter download mode.
+
+> **Waveshare ESP32-S3-Touch-LCD-1.54 note**: the display uses **Arduino_GFX** (GFX
+> Library for Arduino **1.6.0**) with the ESP32 core pinned to **3.2.0** — the same
+> proven stack as the Waveshare examples. TFT_eSPI 2.5.43 crashes on ESP32-S3 on both
+> core 3.x and 2.0.x, so the Waveshare path was switched to `-DT_WAVESHARE_154`
+> selecting Arduino_GFX via the `WS154Display` adapter (see the `waveshare` profile in
+> `sketch.yaml`). The board uses **8 MB OPI PSRAM** (`PSRAM=opi`) and native USB
+> (`USBMode=hwcdc, CDCOnBoot=cdc`); hold the **BOOT** button while plugging in USB and
+> power-cycle after flashing. To reset WiFi, hold the **PLUS** button (GPIO5) for 5
+> seconds. Note that arduino-cli keeps only one esp32 core version installed at a
+> time, so compiling the `waveshare` profile auto-installs core 3.2.0 and compiling
+> the other profiles auto-installs 3.3.10 again.
 
 > **Flash from a different computer**: the `upload/` directory carries precompiled
 > binaries and `./upload.sh` / `./upload_plus.sh` scripts for both T-Dongle-S3 boards.
@@ -82,7 +100,7 @@ arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3_plus .
 #### Arduino IDE
 
 1. Add `https://espressif.github.io/arduino-esp32/package_esp32_index.json` to *Additional Boards Manager URLs*
-2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**, and **TFT_eSPI** (T-Dongle-S3 only, see `libraries/`). The USB HID keyboard library is built into the ESP32 core — no additional install needed.
+2. Install **ESP32** board package and libraries: **WiFiManager**, **M5GFX** (AtomS3 only), **WebSockets**, **TFT_eSPI** (T-Dongle-S3 only, see `libraries/`), and **GFX Library for Arduino** (Waveshare only). The USB HID keyboard library is built into the ESP32 core — no additional install needed.
 3. Select **M5AtomS3** (or **ESP32S3 Dev Module** for generic boards)
 4. Set *Tools → USB Mode → **USB-OTG (TinyUSB)***
 5. Set *Tools → USB CDC On Boot → **Disabled***
@@ -172,7 +190,7 @@ arduino-cli compile --profile atoms3 . --output-dir /tmp/touchwasd-build \
 
 Or use the web interface at `http://touchwasd.local/update`.
 
-OTA works identically for the T-Dongle-S3 / T-Dongle-S3-Plus boards — compile with their profile and pass the device IP to `--protocol network`:
+OTA works identically for the T-Dongle-S3 / T-Dongle-S3-Plus / Waveshare ESP32-S3-Touch-LCD-1.54 boards — compile with their profile (add `--build-property compiler.cpp.extra_flags=-DT_WAVESHARE_154` for the Waveshare) and pass the device IP to `--protocol network`:
 
 ```bash
 arduino-cli compile --profile tdongle_s3 . \
@@ -202,6 +220,7 @@ Hold the built-in button for 5 seconds:
 - **AtomS3**: hold GPIO41 button (display shows "Resetting WiFi...")
 - **Generic**: hold BOOT button (GPIO0)
 - **T-Dongle-S3 / T-Dongle-S3-Plus**: hold BOOT button (GPIO0)
+- **Waveshare ESP32-S3-Touch-LCD-1.54**: hold the PLUS button (GPIO5)
 
 WiFi credentials are erased and the device reboots into the `touchWASD-Config` captive portal.
 
@@ -213,6 +232,7 @@ WiFi credentials are erased and the device reboots into the `touchWASD-Config` c
 AtomS3:   esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default
 Generic:  esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
 T-Dongle-S3 / Plus: esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,LoopCore=1
+Waveshare ESP32-S3-Touch-LCD-1.54: esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc
 ```
 
 ### Required Libraries
@@ -220,7 +240,8 @@ T-Dongle-S3 / Plus: esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9
 - **WiFiManager** by tzapu
 - **WebSockets** by Markus Sattler
 - **M5GFX** by M5Stack (AtomS3 only — optional for generic boards)
-- **TFT_eSPI** by Bodmer — vendored in `libraries/TFT_eSPI` (T-Dongle-S3 / Plus only, configured for the 160×80 ST7735)
+- **TFT_eSPI** by Bodmer — vendored in `libraries/TFT_eSPI` (T-Dongle-S3 / Plus, configured for the 160×80 ST7735)
+- **GFX Library for Arduino** by Moon On Our Nation — Waveshare ESP32-S3-Touch-LCD-1.54 only (240×240 ST7789 via Arduino_GFX)
 - USB HID keyboard is built into the ESP32 core (`USB.h`) — no additional library needed
 
 ### Versions
@@ -229,14 +250,18 @@ Pinned in `sketch.yaml` for reproducible builds:
 
 | Component | Version | Notes |
 |---|---|---|
-| ESP32 Core | 3.3.10 | Pinned in `sketch.yaml` |
+| ESP32 Core | 3.3.10 | Pinned in `sketch.yaml` (waveshare profile pins 3.2.0) |
 | WiFiManager | 2.0.17 | Pinned in `sketch.yaml` |
 | WebSockets | 2.7.2 | Pinned in `sketch.yaml` |
 | M5GFX | 0.2.26 | Pinned in `sketch.yaml` (AtomS3 only) |
 | TFT_eSPI | 2.5.43 | Vendored in `libraries/TFT_eSPI` (T-Dongle-S3 only) |
+| GFX Library for Arduino | 1.6.0 | Pinned in `sketch.yaml` (Waveshare only; requires core 3.2.0) |
 
 
 ## Changelog
+
+### v1.2.0 (2026-08-14)
+- **Waveshare ESP32-S3-Touch-LCD-1.54 support**: 240×240 ST7789 status display via **Arduino_GFX** (GFX Library for Arduino 1.6.0) on core **3.2.0** — the proven Waveshare example stack. TFT_eSPI 2.5.43 crashes on ESP32-S3 on both core 3.x and 2.0.x (StoreProhibited in `begin_tft_write`), so the earlier vendored-TFT_eSPI approach was replaced; a `WS154Display` adapter in `touchwasd.ino` exposes the sketch's TFT_eSPI API subset over Arduino_GFX. `waveshare` profile in `sketch.yaml` (16 MB flash, OPI PSRAM, hwcdc, core 3.2.0). WiFi reset via the PLUS button (GPIO5).
 
 ### v1.0.5 (2026-07-28)
 - **iOS Safari diagonal arrow fix**: appended Unicode variation selector `\uFE0E` to diagonal glyphs (`↗`, `↘`, etc.) so they render as plain text instead of emoji-style buttons on iOS Safari

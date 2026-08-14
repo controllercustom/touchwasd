@@ -36,7 +36,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>touchWASD 1.1.0</title>
+    <title>touchWASD 1.2.0</title>
     <style>
         :root {
             --bg: #1a1a2e;

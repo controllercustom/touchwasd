@@ -43,13 +43,57 @@
 // Require hardware-CDC USB mode (ARDUINO_USB_MODE==1, i.e. USBMode=hwcdc, which
 // all tdongle_s3* profiles select) so a stray global TFT_eSPI can never enable
 // the T-Dongle display path on AtomS3 / generic ESP32-S3 builds.
-#if defined(__has_include)
+// Waveshare ESP32-S3-Touch-LCD-1.54: selected explicitly via -DT_WAVESHARE_154 on
+// the build command line (see the `waveshare` profile in sketch.yaml). It must be
+// checked BEFORE the T-Dongle __has_include probe below, which would otherwise also
+// fire for this board (both use USBMode=hwcdc and would otherwise share a display path).
+#if defined(T_WAVESHARE_154)
+#  define WAVESHARE_154
+#  include <Arduino_GFX_Library.h>
+// TFT_eSPI 2.5.43 crashes on ESP32-S3 on core 3.x and 2.0.x (StoreProhibited in
+// begin_tft_write), so the Waveshare uses the proven example stack: core 3.2.0 +
+// GFX Library for Arduino 1.6.0. Adapter below exposes the TFT_eSPI API subset
+// the sketch uses on top of Arduino_GFX.
+#  define TFT_BLACK BLACK
+#  define TFT_CYAN  CYAN
+#  define TFT_WHITE WHITE
+#  define TFT_BL    46
+class WS154Display {
+public:
+  Arduino_GFX* gfx;
+  WS154Display(Arduino_GFX* g) : gfx(g) {}
+  void init() { gfx->begin(); }
+  void setRotation(uint8_t r) { gfx->setRotation(r); }
+  void fillScreen(uint16_t c) { gfx->fillScreen(c); }
+  void setCursor(int16_t x, int16_t y) { gfx->setCursor(x, y); }
+  void setTextSize(uint8_t s) { gfx->setTextSize(s); }
+  void setTextFont(uint8_t f) { gfx->setTextSize(f); }
+  void setTextColor(uint16_t fg, uint16_t bg) { gfx->setTextColor(fg, bg); }
+  void setTextColor(uint16_t fg) { gfx->setTextColor(fg); }
+  template<typename T> void print(const T& v) { gfx->print(v); }
+  template<typename T> void println(const T& v) { gfx->println(v); }
+  void println() { gfx->println(); }
+  void printf(const char* fmt, ...) __attribute__((format(printf, 2, 3))) {
+    va_list ap; va_start(ap, fmt);
+    char buf[128];
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    gfx->print(buf);
+  }
+  int16_t textWidth(const char* s) {
+    int16_t x1, y1; uint16_t w, h;
+    gfx->getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
+    return w;
+  }
+  int16_t width() { return gfx->width(); }
+};
+#elif defined(__has_include)
 #  if __has_include(<TFT_eSPI.h>) && defined(ARDUINO_USB_MODE) && (ARDUINO_USB_MODE == 1)
 #    define T_DONGLE_S3
 #    include <TFT_eSPI.h>
 #  endif
 #endif
-#define VERSION "1.1.0"
+#define VERSION "1.2.0"
 
 // Standard USB HID usage IDs for arrow keys (passed directly to pressRaw/releaseRaw)
 #define KEY_UP    0x52
@@ -67,6 +111,9 @@ M5GFX display;
 #ifdef T_DONGLE_S3
 TFT_eSPI display;
 #endif
+#ifdef WAVESHARE_154
+WS154Display display(new Arduino_ST7789(new Arduino_ESP32SPI(45, 21, 38, 39, -1), 40, 0, true, 240, 240));
+#endif
 WebServer server(80);
 WebSocketsServer webSocket(81);
 
@@ -80,6 +127,8 @@ WiFiManagerParameter customHostnameParam("hostname", "Device hostname", "touchwa
 #define RESET_BUTTON_PIN 41
 #elif defined(T_DONGLE_S3)
 #define RESET_BUTTON_PIN 0
+#elif defined(WAVESHARE_154)
+#define RESET_BUTTON_PIN 5
 #else
 #define RESET_BUTTON_PIN 0
 #endif
@@ -237,13 +286,13 @@ static void updateDisplay() {
   display.printf("Mode: %s", currentMode == MODE_WASD ? "WASD" : "Arrows");
   display.printf("\nClients: %d", wsClientCount);
 }
-#elif defined(T_DONGLE_S3)
-// Truncate a line so it fits the 160px wide panel at the current font size
+#elif defined(T_DONGLE_S3) || defined(WAVESHARE_154)
+// Truncate a line so it fits the panel width at the current font size
 // (font 2 is 16px high but ~8px per char wide, so long hostnames would clip).
 static void printClipped(const char* s) {
   char buf[64];
   snprintf(buf, sizeof(buf), "%s", s);
-  while (buf[0] != '\0' && display.textWidth(buf) > 160) {
+  while (buf[0] != '\0' && display.textWidth(buf) > display.width()) {
     buf[strlen(buf) - 1] = '\0';
   }
   display.println(buf);
@@ -295,6 +344,8 @@ void setup() {
   Serial.println("[BOARD] LilyGo T-Dongle-S3-Plus");
 #elif defined(T_DONGLE_S3)
   Serial.println("[BOARD] LilyGo T-Dongle-S3");
+#elif defined(WAVESHARE_154)
+  Serial.println("[BOARD] Waveshare ESP32-S3-Touch-LCD-1.54");
 #endif
 
 #ifdef ARDUINO_M5STACK_ATOMS3
@@ -304,6 +355,10 @@ void setup() {
   display.setRotation(1);
   pinMode(38, OUTPUT);
   digitalWrite(38, 0);
+#elif defined(WAVESHARE_154)
+  display.init();
+  pinMode(TFT_BL, OUTPUT);
+  digitalWrite(TFT_BL, HIGH);
 #endif
   bootMsg("Starting...", nullptr, nullptr);
 
@@ -462,7 +517,7 @@ static void handleResetButton(unsigned long now) {
   } else if (resetPressed && resetButtonWasLow) {
     if (now - resetPressStart >= 5000) {
       Serial.println("[WiFi] Button held 5s — erasing credentials and rebooting");
-#if defined(ARDUINO_M5STACK_ATOMS3) || defined(T_DONGLE_S3)
+#if defined(ARDUINO_M5STACK_ATOMS3) || defined(T_DONGLE_S3) || defined(WAVESHARE_154)
       bootMsg("Resetting", "WiFi...", nullptr);
 #endif
       delay(100);

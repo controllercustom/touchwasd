@@ -7,6 +7,7 @@ Web-based WASD/Arrow key USB HID keyboard. ESP32-S3 hosts a WebSocket server tha
 - **Primary**: M5Stack AtomS3 (`esp32:esp32:m5stack_atoms3`)
 - **Alternative**: Generic ESP32-S3 Dev Module (`esp32:esp32:esp32s3`)
 - **T-Dongle-S3 / T-Dongle-S3-Plus**: LilyGo (`esp32:esp32:esp32s3` + 16M flash / hwcdc FQBN, see profiles `tdongle_s3` / `tdongle_s3_plus`)
+- **Waveshare ESP32-S3-Touch-LCD-1.54**: (`esp32:esp32:esp32s3` + 16M flash / OPI PSRAM / hwcdc FQBN / core **3.2.0**, see profile `waveshare`; build with `-DT_WAVESHARE_154`)
 
 ## Key Technical Details
 - **USB HID**: Built on the ESP32 core's built-in `USBHIDKeyboard` class (`#include <USB.h>`). Uses a standard keyboard-only report descriptor (no mouse/consumer interfaces). Sends 8-byte boot keyboard reports via `pressRaw()`/`releaseRaw()`.
@@ -17,9 +18,11 @@ Web-based WASD/Arrow key USB HID keyboard. ESP32-S3 hosts a WebSocket server tha
 - **mDNS**: Default `touchwasd.local`; configurable via "Device hostname" field in the WiFiManager captive portal.
 - **OTA**: ArduinoOTA enabled — upload via `espota.py` at `<hostname>.local:3232`. Web OTA at `http://<hostname>.local/update`. Optional password authentication via `#define OTA_PASS` (default commented out) in source (see README).
 - **Diagnostics**: Serial monitor at 115200 baud.
+- **Versioning**: The firmware version string exists in TWO places and MUST stay in sync: `VERSION` in `touchwasd.ino` and the `touchWASD <ver>` title in `webpage.h`. When bumping the version, update both.
 - **Display (AtomS3)**: Shows IP, hostname, mode (WASD/Arrows), and client count. Uses M5GFX library.
 - **Display (T-Dongle-S3 / Plus)**: Same status on the 160×80 ST7735 via **vendored TFT_eSPI** (`libraries/TFT_eSPI`, version 2.5.43). Auto-detected at compile time with `__has_include(<TFT_eSPI.h>)` **and** `ARDUINO_USB_MODE == 1` (i.e. `USBMode=hwcdc`, which all tdongle profiles select) → defines `T_DONGLE_S3`. The USB-mode guard prevents a stray global TFT_eSPI from enabling the T-Dongle path on AtomS3/generic builds. The vendored library's `User_Setups/Setup47_ST7735.h` is the T-Dongle-S3 config (ST7735 GREENTAB160x80, BGR, pins MOSI=3 SCLK=5 CS=4 DC=2 RST=1, backlight GPIO38 active-low 0=on). Do not add/remove that marker. The Plus is the same board plus `-DT_DONGLE_S3_PLUS` (only used for a boot banner; display/reset identical).
-- **Physical reset**: Hold the built-in button 5s (AtomS3 GPIO41 / generic & T-Dongle-S3 BOOT GPIO0) to erase WiFi credentials and reboot into the `touchWASD-Config` captive portal.
+- **Display (Waveshare ESP32-S3-Touch-LCD-1.54)**: Same status on the 1.54" 240×240 ST7789 via **Arduino_GFX** (GFX Library for Arduino **1.6.0**, core **3.2.0**) — the same proven stack as the Waveshare examples. TFT_eSPI 2.5.43 was abandoned because it crashes on ESP32-S3 on both core 3.x and 2.0.x (StoreProhibited in `begin_tft_write`). Selected EXPLICITLY by the `-DT_WAVESHARE_154` build flag (defined before any `__has_include` probe) → defines `WAVESHARE_154` and includes `<Arduino_GFX_Library.h>`. The flag must be checked BEFORE the T-Dongle probe because both boards use `USBMode=hwcdc` — otherwise a waveshare build could mis-detect as `T_DONGLE_S3`. Display is wrapped by the `WS154Display` adapter in `touchwasd.ino`, which exposes the TFT_eSPI API subset the sketch uses on top of Arduino_GFX (`new Arduino_ST7789(new Arduino_ESP32SPI(45, 21, 38, 39, -1), 40, 0, true, 240, 240)`; `printf()` is buffered via `vsnprintf` because forwarding a `va_list` to `Print::printf` picks the wrong overload). Display config: ST7789 240×240, pins MOSI=39 SCLK=38 CS=21 DC=45 RST=40, backlight GPIO46 (active-high, set HIGH in setup). Do not add/remove that marker.
+- **Physical reset**: Hold the built-in button 5s (AtomS3 GPIO41 / generic & T-Dongle-S3 BOOT GPIO0 / Waveshare **PLUS** GPIO5) to erase WiFi credentials and reboot into the `touchWASD-Config` captive portal.
 
 ## Modes
 - **WASD mode** (default): `w`, `a`, `s`, `d` keycodes via `charToHID()` lookup table
@@ -56,6 +59,11 @@ arduino-cli compile --profile tdongle_s3 .
 # LilyGo T-Dongle-S3-Plus (same FQBN as base; define T_DONGLE_S3_PLUS for the banner)
 arduino-cli compile --profile tdongle_s3_plus . --build-property compiler.cpp.extra_flags=-DT_DONGLE_S3_PLUS
 
+# Waveshare ESP32-S3-Touch-LCD-1.54 (240x240 ST7789 via Arduino_GFX; core 3.2.0; the esp32 core
+# pins 3.2.0 and 3.3.10 cannot coexist in arduino-cli — compiling any profile auto-installs its
+# pinned core version, so switching profiles swaps the installed core)
+arduino-cli compile --profile waveshare . --build-property compiler.cpp.extra_flags=-DT_WAVESHARE_154
+
 # Serial upload — AtomS3: hold Reset button 2-3s for download mode (LED turns green)
 arduino-cli upload -p /dev/ttyACM0 --fqbn "esp32:esp32:m5stack_atoms3:PartitionScheme=default_8MB,USBMode=default,CDCOnBoot=default" .
 
@@ -66,6 +74,10 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn "esp32:esp32:esp32s3:USBMode=default,C
 # hold BOOT while plugging in to enter download mode)
 arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3 .
 arduino-cli upload -p /dev/ttyACM0 --profile tdongle_s3_plus .
+
+# Serial upload — Waveshare ESP32-S3-Touch-LCD-1.54 (native USB CDC, /dev/ttyACM0;
+# hold BOOT while plugging in, power-cycle after flashing)
+arduino-cli upload -p /dev/ttyACM0 --profile waveshare .
 
 # Native OTA upload (arduino-cli 1.5.1+). Pass the device IP (or hostname) directly
 # to `-p` with `--protocol network` (without it arduino-cli tries to open the
